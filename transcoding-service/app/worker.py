@@ -20,6 +20,7 @@ transcoding_service = TranscodingService()
 
 async def poll_queue():
     # this method will continously poll the sqs queue and if for any message it will process it and then delete the message from the queue
+    #This is the startup point of this service - Its not like the other HTTP srvices instead it act as the worker in the background which is continously running and polling sqs
     while True:
         try:
             response = sqs_client.receive_message(
