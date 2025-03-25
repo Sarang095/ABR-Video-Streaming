@@ -1,0 +1,6 @@
+boto3==1.26.145
+pymongo==4.3.3
+pydantic==1.10.9
+python-dotenv==1.0.0
+requests==2.31.0
+loguru==0.6.0
