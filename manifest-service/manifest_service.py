@@ -32,7 +32,7 @@ class ManifestService:
         self.videos_collection = self.db.videos
         
         # S3 Bucket Configuration
-        self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET")
+        self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
         
         # SNS Client for notifications
         self.sns_client = boto3.client(
@@ -41,7 +41,7 @@ class ManifestService:
             aws_secret_access_key=os.getenv("AWS_SECRET_KEY"),
             region_name=os.getenv("AWS_REGION", "us-east-1")
         )
-        self.delivery_topic_arn = os.getenv("SNS_DELIVERY_TOPIC")
+        self.delivery_topic_arn = os.getenv("SNS_DELIVERY_TOPIC", "arn:aws:sns:us-east-1:891612545820:SNS-Delivery-Topic:d602310a-4db3-499b-986e-037e2c6065dd")
         
         # Configure logging
         logger.add("manifest_service.log", rotation="10 MB")

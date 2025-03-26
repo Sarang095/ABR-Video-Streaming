@@ -30,10 +30,10 @@ class TranscodingService:
         self.s3_client = boto3.client('s3', region_name=os.getenv("AWS_REGION", "us-east-1"))
         
         self.raw_bucket = os.getenv("S3_RAW_BUCKET", "s3-raw-bucket-49")
-        self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "s3-processed-bucket-49")
+        self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
         self.sns_client = boto3.client('sns', region_name=os.getenv("AWS_REGION", "us-east-1"))
         
-        self.manifest_topic_arn = os.getenv("SNS_MANIFEST_TOPIC")
+        self.manifest_topic_arn = os.getenv("SNS_MANIFEST_TOPIC", "arn:aws:sns:us-east-1:891612545820:SNS-Manifest-Topic:3a2eb580-2b2e-4fe4-8753-7d886a8560ed")
         
         # Initialize utility services
         self.metadata_service = MetadataService()
