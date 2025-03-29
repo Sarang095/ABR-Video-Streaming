@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class UploadService:
     # Correct constructor name: __init__
     def __init__(self):
-        mongo_uri = os.getenv("MONGO_URI")  # declared the endpoint for the mongo db either from MONGO_URI env variable or a default value
+        mongo_uri = os.getenv("MONGO_URI", "localhost:")  # declared the endpoint for the mongo db either from MONGO_URI env variable or a default value
         self.mongo_client = MongoClient(mongo_uri)  # declared the mongo client which handles the communication with the mongo db and we use this client to access the database and collections
         self.db = self.mongo_client[os.getenv("MONGO_DB", "abr_streaming")]  # declared the database to use for the upload service named abr_streaming
         self.videos_collection = self.db.videos  # declared the collection to use for the upload service named videos - collection is like a table in a relational database (here videos_collection is a collection of videos)
@@ -23,7 +23,7 @@ class UploadService:
         self.sqs_client = boto3.client("sqs", region_name=os.getenv("AWS_REGION", "us-east-1"))  # declared the sqs client which handles the communication with the sqs queue and we use this client to access the queue and messages
 
         # declared the queue to use for the upload service named abr_streaming
-        self.transcoding_queue_url = os.getenv("SQS_TRANSCODING_QUEUE", "https://sqs.us-east-1.amazonaws.com/891612545820/SQS-ABR-Streaming")
+        self.transcoding_queue_url = os.getenv("SQS_TRANSCODING_QUEUE", "https://sqs.us-east-1.amazonaws.com/891612545820/ABR-Streaming-Queue")
 
     # Helper method to upload file to S3
     async def _upload_to_s3(self, file: UploadFile, s3_key: str):
@@ -67,8 +67,8 @@ class UploadService:
             "filename": metadata.filename,
         }
         # Send message to SQS
-        try:
-            loop = asyncio.get_event_loop()
+        try: #this message is sent to SQS and it is stored in the queue and then the transcoding service will pick it up and process it.
+            loop = asyncio.get_event_loop() # this is how the transcioing service will handle it inode snippet form example - 
             await loop.run_in_executor(
                 None,
                 lambda: self.sqs_client.send_message(
