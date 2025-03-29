@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class UploadService:
     # Correct constructor name: __init__
     def __init__(self):
-        mongo_uri = os.getenv("MONGO_URI", "localhost:")  # declared the endpoint for the mongo db either from MONGO_URI env variable or a default value
+        mongo_uri = os.getenv("MONGO_URI", "localhost:27017")  # declared the endpoint for the mongo db either from MONGO_URI env variable or a default value
         self.mongo_client = MongoClient(mongo_uri)  # declared the mongo client which handles the communication with the mongo db and we use this client to access the database and collections
         self.db = self.mongo_client[os.getenv("MONGO_DB", "abr_streaming")]  # declared the database to use for the upload service named abr_streaming
         self.videos_collection = self.db.videos  # declared the collection to use for the upload service named videos - collection is like a table in a relational database (here videos_collection is a collection of videos)
