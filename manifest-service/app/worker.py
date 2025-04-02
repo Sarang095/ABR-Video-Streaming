@@ -17,7 +17,7 @@ class SNSWorker:
     
     def __init__(self):
         """Initialize the SNS worker."""
-        self.sqs_client = boto3.client('sqs')
+        self.sqs_client = boto3.client('sqs', region_name=os.getenv("AWS_REGION", "us-east-1"))
         self.queue_url = os.getenv("SQS_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/ABR-Streaming-Queue")
         
         self.manifest_service = ManifestService()
