@@ -7,9 +7,9 @@ from loguru import logger
 from datetime import datetime
 import tempfile
 import shutil
+import pymongo
 from botocore.exceptions import ClientError
 
-from app.services.metadata_service import MetadataService
 from app.utils.ffmpeg import FFmpegProcessor
 from app.utils.s3 import S3Utilities
 
@@ -17,13 +17,13 @@ class TranscodingService:
     """
     Service for transcoding videos into multiple quality renditions.
     
-    This service handles:
+    This service now handles:
     1. Downloading videos from S3
     2. Analyzing video properties
     3. Generating multiple quality renditions
-    4. Creating HLS segments
+    4. Creating HLS segments and master playlist
     5. Uploading results back to S3
-    6. Notifying downstream services
+    6. Updating metadata in MongoDB directly
     """
     
     def __init__(self):
@@ -32,12 +32,14 @@ class TranscodingService:
             
         self.raw_bucket = os.getenv("S3_RAW_BUCKET", "s3-raw-bucket-49")
         self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
-        self.sns_client = boto3.client('sns', region_name=os.getenv("AWS_REGION", "us-east-1"))
         
-        self.manifest_topic_arn = os.getenv("SNS_MANIFEST_TOPIC", "arn:aws:sns:us-east-1:891612545820:SNS-Manifest-Topic")
+        # Connect to MongoDB directly
+        mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+        self.mongo_client = pymongo.MongoClient(mongo_uri)
+        self.db = self.mongo_client[os.getenv("MONGODB_DATABASE", "video_platform")]
+        self.videos_collection = self.db["videos"]
         
         # Initialize utility services
-        self.metadata_service = MetadataService()
         self.s3_utils = S3Utilities(self.s3_client)
         self.ffmpeg = FFmpegProcessor()
         
@@ -50,6 +52,49 @@ class TranscodingService:
             ("720p", 2500, 192),
             ("1080p", 5000, 192),
         ]
+    
+    async def update_video_status(self, video_id, status, error=None):
+        """
+        Update the video status in MongoDB.
+        
+        Args:
+            video_id: The ID of the video
+            status: The status to set
+            error: Optional error message
+        """
+        update_data = {"status": status, "updated_at": datetime.utcnow()}
+        if error:
+            update_data["error"] = error
+            
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: self.videos_collection.update_one(
+                {"_id": video_id},
+                {"$set": update_data}
+            )
+        )
+        logger.info(f"Updated video status to {status} for video ID: {video_id}")
+    
+    async def update_video_info(self, video_id, **kwargs):
+        """
+        Update video metadata in MongoDB.
+        
+        Args:
+            video_id: The ID of the video
+            **kwargs: Video metadata fields to update
+        """
+        update_data = {**kwargs, "updated_at": datetime.utcnow()}
+        
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: self.videos_collection.update_one(
+                {"_id": video_id},
+                {"$set": update_data}
+            )
+        )
+        logger.info(f"Updated video info for video ID: {video_id}")
     
     async def process_video(self, video_id, input_path, filename):
         """
@@ -68,7 +113,7 @@ class TranscodingService:
         try:
             logger.info(f"Starting transcoding for video ID: {video_id}")
             
-            await self.metadata_service.update_status(video_id, "processing")
+            await self.update_video_status(video_id, "processing")
             
             logger.info(f"Downloading video from S3: {input_path}")
             await self.s3_utils.download_file(self.raw_bucket, input_path, input_file)
@@ -76,7 +121,7 @@ class TranscodingService:
             logger.info(f"Analyzing video properties: {input_file}")
             video_info = await self.ffmpeg.analyze_video(input_file)
             
-            await self.metadata_service.update_video_info(
+            await self.update_video_info(
                 video_id, 
                 file_size=os.path.getsize(input_file),
                 duration=video_info.get("duration"),
@@ -85,6 +130,8 @@ class TranscodingService:
             )
             
             rendition_data = []
+            available_renditions = []
+            
             for resolution, bitrate, audio_bitrate in self.renditions:
                 if (resolution == "1080p" and video_info.get("height", 0) < 1080 or
                     resolution == "720p" and video_info.get("height", 0) < 720):
@@ -104,22 +151,28 @@ class TranscodingService:
                     segment_time=6
                 )
                 
-                # Use glob to count generated segment files (assuming naming pattern segment_XXX.ts)
+                # Use glob to count generated segment files
                 segment_files = glob.glob(os.path.join(rendition_dir, "segment_*.ts"))
                 segment_count = len(segment_files)
                 
-                # Define a segment_prefix that matches the S3 key structure.
-                # Here, since files in rendition_dir are uploaded with keys: processed/{video_id}/{resolution}/<filename>,
-                # we set the prefix as: "{resolution}/segment_"
-                segment_prefix = f"{resolution}/segment_"
+                s3_path = f"{video_id}/segments/{resolution}"
                 
                 rendition_data.append({
                     "resolution": resolution,
                     "bitrate": bitrate * 1000,  # in bps
-                    "segment_prefix": segment_prefix,
                     "segment_count": segment_count,
-                    "path": f"{video_id}/segments/{resolution}"
+                    "path": s3_path,
+                    "playlist": f"{s3_path}/playlist.m3u8"
                 })
+                
+                available_renditions.append({
+                    "resolution": resolution,
+                    "bandwidth": bitrate * 1000,
+                    "playlist": f"segments/{resolution}/playlist.m3u8"
+                })
+            
+            # Create master playlist with all renditions
+            await self._create_master_playlist(output_dir, available_renditions)
             
             logger.info(f"Uploading processed files to S3 for video ID: {video_id}")
             for root, _, files in os.walk(output_dir):
@@ -127,39 +180,41 @@ class TranscodingService:
                     local_path = os.path.join(root, file)
                     rel_path = os.path.relpath(local_path, output_dir)
                     
-                    # Determine upload path based on file type.
-                    if file.endswith(".ts"):
-                        # Upload segments under {video_id}/segments/{resolution}/...
-                        s3_key = f"{video_id}/segments/{rel_path}"
-                    else:
-                        # Upload HLS playlists (or other files) under {video_id}/manifests/...
-                        s3_key = f"{video_id}/manifests/{rel_path}"
-                    
+                    # Determine content type based on file extension
                     content_type = "application/octet-stream"
                     if file.endswith(".ts"):
                         content_type = "video/MP2T"
                     elif file.endswith(".m3u8"):
                         content_type = "application/vnd.apple.mpegurl"
                     
+                    # Upload to S3
+                    s3_key = f"{video_id}/{rel_path}"
                     await self.s3_utils.upload_file(
                         local_path, 
                         self.processed_bucket, 
                         s3_key,
                         content_type
                     )
-
             
-            await self.metadata_service.update_renditions(video_id, rendition_data)
+            # Update MongoDB with rendition data and playback URLs
+            playback_urls = {
+                "hls": f"https://{self.processed_bucket}.s3.amazonaws.com/{video_id}/master.m3u8",
+                "dash": None  # Add DASH support if needed in the future
+            }
             
-            # Notify manifest service with the updated rendition data including segment_prefix and segment_count
-            await self._notify_manifest_service(video_id, rendition_data)
+            await self.update_video_info(
+                video_id,
+                renditions=rendition_data,
+                playback_urls=playback_urls,
+                processed=True
+            )
             
-            await self.metadata_service.update_status(video_id, "transcoded")
+            await self.update_video_status(video_id, "ready")
             logger.info(f"Transcoding completed successfully for video ID: {video_id}")
             
         except Exception as e:
             logger.error(f"Error transcoding video {video_id}: {str(e)}")
-            await self.metadata_service.update_status(
+            await self.update_video_status(
                 video_id, 
                 "failed", 
                 error=f"Transcoding error: {str(e)}"
@@ -173,34 +228,23 @@ class TranscodingService:
             except Exception as e:
                 logger.error(f"Error cleaning up temporary directory: {str(e)}")
     
-    async def _notify_manifest_service(self, video_id, rendition_data):
+    async def _create_master_playlist(self, output_dir, renditions):
         """
-        Notify the manifest service that transcoding is complete.
+        Create a master HLS playlist that includes all quality renditions.
         
         Args:
-            video_id: The ID of the video
-            rendition_data: List of rendition details (including segment_prefix and segment_count)
+            output_dir: Directory to store the master playlist
+            renditions: List of rendition information
         """
-        try:
-            message = {
-                "event_type": "transcoding_complete",
-                "video_id": video_id,
-                "renditions": rendition_data,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+        master_playlist_path = os.path.join(output_dir, "master.m3u8")
+        
+        with open(master_playlist_path, "w") as f:
+            f.write("#EXTM3U\n")
+            f.write("#EXT-X-VERSION:3\n")
             
-            logger.info(f"Notifying manifest service for video ID: {video_id}")
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: self.sns_client.publish(
-                    TopicArn=self.manifest_topic_arn,
-                    Message=json.dumps(message),
-                    Subject=f"Transcoding Complete: {video_id}"
-                )
-            )
-            
-            logger.info(f"Manifest service notified for video ID: {video_id}")
-            
-        except ClientError as e:
-            logger.error(f"Error notifying manifest service: {str(e)}")
+            # Add each rendition to the master playlist
+            for rendition in renditions:
+                f.write(f"#EXT-X-STREAM-INF:BANDWIDTH={rendition['bandwidth']},RESOLUTION={rendition['resolution']}\n")
+                f.write(f"{rendition['playlist']}\n")
+        
+        logger.info(f"Created master playlist at {master_playlist_path}")

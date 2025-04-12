@@ -15,7 +15,7 @@ class ManifestService:
     So when the video is requested by the client the manifest file will be returned and the client will be able to request the video segments from the S3 bucket adaptively.
 
     """
-    def __init_(self):
+    def __init__(self):
         self.metadata_service = MetadataService()
         self.s3_helper = S3Helper()
         self.hls_generator = HLSManifestGenerator()

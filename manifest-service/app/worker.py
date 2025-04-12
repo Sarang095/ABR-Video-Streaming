@@ -135,7 +135,7 @@ class SNSWorker:
                     logger.info(f"Processing transcoding complete event for video {video_id}")
                     
                     # Generate manifests for the video
-                    await self.manifest_service.generate_manifests(video_id, renditions)
+                    await self.manifest_service.generate_manifest(video_id, renditions)
                 else:
                     logger.warning("Invalid transcoding complete event: missing video_id or renditions")
             
