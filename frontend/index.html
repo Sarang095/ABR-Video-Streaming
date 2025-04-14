@@ -305,6 +305,17 @@
             color: white;
         }
         
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            background-color: #282828;
+            color: white;
+            min-height: 100px;
+            resize: vertical;
+        }
+        
         .upload-area {
             border: 2px dashed #444;
             border-radius: 6px;
@@ -384,6 +395,23 @@
             font-size: 14px;
             text-align: right;
         }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--secondary-text);
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.6;
+        }
+        
+        .empty-state p {
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -402,10 +430,14 @@
     </header>
     
     <main>
-        <section>
+        <section id="processingSection">
             <h2 class="section-title">Processing Videos</h2>
             <div id="processingVideos" class="video-grid">
                 <!-- Processing videos will be added here dynamically -->
+                <div class="empty-state">
+                    <i class="fas fa-film"></i>
+                    <p>No videos are currently processing</p>
+                </div>
             </div>
         </section>
         
@@ -413,6 +445,10 @@
             <h2 class="section-title">My Videos</h2>
             <div id="readyVideos" class="video-grid">
                 <!-- Ready videos will be added here dynamically -->
+                <div class="empty-state">
+                    <i class="fas fa-video"></i>
+                    <p>You haven't uploaded any videos yet</p>
+                </div>
             </div>
         </section>
     </main>
@@ -432,6 +468,7 @@
                     <span id="videoDuration">Duration: 00:00</span>
                     <span id="videoResolution">Resolution: 1080p</span>
                 </div>
+                <p id="videoDescription">Loading description...</p>
             </div>
         </div>
     </div>
@@ -444,6 +481,11 @@
                 <div class="form-group">
                     <label for="videoTitle">Video Title</label>
                     <input type="text" id="videoTitle" placeholder="Enter video title" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="videoDescription">Description</label>
+                    <textarea id="videoDescription" placeholder="Enter video description"></textarea>
                 </div>
                 
                 <div class="upload-area" id="uploadArea">
@@ -487,13 +529,17 @@
         const modalVideoTitle = document.getElementById('modalVideoTitle');
         const videoDuration = document.getElementById('videoDuration');
         const videoResolution = document.getElementById('videoResolution');
+        const videoDescription = document.getElementById('videoDescription');
         const processingVideos = document.getElementById('processingVideos');
         const readyVideos = document.getElementById('readyVideos');
+        const processingSection = document.getElementById('processingSection');
         
-        // API endpoints
-        const API_BASE_URL = '/api';
-        const UPLOAD_ENDPOINT = `${API_BASE_URL}/videos/upload`;
-        const VIDEOS_ENDPOINT = `${API_BASE_URL}/videos`;
+        // API endpoints - Using your actual service IPs and ports
+        const UPLOAD_SERVICE_URL = 'http://54.197.28.224:8000';
+        const DELIVERY_SERVICE_URL = 'http://54.197.28.224:8001'; 
+        const UPLOAD_ENDPOINT = `${UPLOAD_SERVICE_URL}/api/videos/upload`;
+        const GET_VIDEOS_ENDPOINT = `${UPLOAD_SERVICE_URL}/api/videos`;
+        const GET_PLAYBACK_URL_ENDPOINT = `${DELIVERY_SERVICE_URL}/api/videos`;
         
         // Add header background on scroll
         window.addEventListener('scroll', () => {
@@ -561,43 +607,53 @@
             }
             
             const title = document.getElementById('videoTitle').value;
+            const description = document.getElementById('videoDescription').value;
             const file = videoFile.files[0];
             
             const formData = new FormData();
             formData.append('title', title);
-            formData.append('video', file);
+            formData.append('description', description);
+            formData.append('file', file); // Using 'file' as the field name for the video upload
+            
+            progressContainer.style.display = 'block';
             
             try {
-                progressContainer.style.display = 'block';
+                // Simulate upload progress for better UX
+                const uploadInterval = setInterval(() => {
+                    const currentWidth = parseInt(progressFill.style.width || '0');
+                    if (currentWidth < 90) {
+                        const newWidth = currentWidth + 5;
+                        progressFill.style.width = `${newWidth}%`;
+                        progressStatus.textContent = `${newWidth}%`;
+                    }
+                }, 500);
                 
                 const response = await fetch(UPLOAD_ENDPOINT, {
                     method: 'POST',
-                    body: formData,
-                    // This simulates upload progress
-                    onUploadProgress: (progressEvent) => {
-                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                        progressFill.style.width = `${percentCompleted}%`;
-                        progressStatus.textContent = `${percentCompleted}%`;
-                    }
+                    body: formData
                 });
+                
+                clearInterval(uploadInterval);
+                progressFill.style.width = '100%';
+                progressStatus.textContent = '100%';
                 
                 if (response.ok) {
                     const result = await response.json();
                     console.log('Upload successful:', result);
                     
                     // Close modal and refresh videos
-                    uploadModal.style.display = 'none';
-                    resetUploadForm();
-                    fetchVideos();
+                    setTimeout(() => {
+                        uploadModal.style.display = 'none';
+                        resetUploadForm();
+                        fetchVideos();
+                    }, 1000);
                 } else {
                     const error = await response.json();
-                    alert(`Upload failed: ${error.detail || 'Unknown error'}`);
+                    alert(`Upload failed: ${error.detail || error.message || 'Unknown error'}`);
                 }
             } catch (error) {
                 console.error('Upload error:', error);
-                alert('Upload failed. Please try again later.');
-            } finally {
-                progressContainer.style.display = 'none';
+                alert('Upload failed. Please check your connection and try again.');
             }
         });
         
@@ -608,19 +664,33 @@
             videoPlayer.src = '';
         });
         
-        // Fetch and display videos
+        // Fetch videos from upload service
         async function fetchVideos() {
             try {
-                // In a real implementation, you would have an endpoint to list videos
-                // For this demo, we'll simulate with a sample response
-                const response = await fetch('/api/videos');
-                const videos = await response.json();
+                const response = await fetch(GET_VIDEOS_ENDPOINT);
                 
+                if (!response.ok) {
+                    throw new Error('Failed to fetch videos');
+                }
+                
+                const videos = await response.json();
                 displayVideos(videos);
             } catch (error) {
                 console.error('Error fetching videos:', error);
-                // For demo purposes, display some sample videos
-                displaySampleVideos();
+                // If API fails, show empty states
+                processingVideos.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-film"></i>
+                        <p>No videos are currently processing</p>
+                    </div>
+                `;
+                
+                readyVideos.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-video"></i>
+                        <p>You haven't uploaded any videos yet</p>
+                    </div>
+                `;
             }
         }
         
@@ -630,34 +700,60 @@
             processingVideos.innerHTML = '';
             readyVideos.innerHTML = '';
             
+            let processingCount = 0;
+            let readyCount = 0;
+            
             videos.forEach(video => {
-                const videoCard = createVideoCard(video);
-                
                 if (video.status === 'processing') {
+                    processingCount++;
+                    const videoCard = createVideoCard(video, 'processing');
                     processingVideos.appendChild(videoCard);
                 } else if (video.status === 'ready') {
+                    readyCount++;
+                    const videoCard = createVideoCard(video, 'ready');
                     readyVideos.appendChild(videoCard);
                 }
             });
             
-            // Hide sections if empty
-            document.querySelector('section:nth-child(1)').style.display = 
-                processingVideos.children.length ? 'block' : 'none';
+            // Show empty states if no videos
+            if (processingCount === 0) {
+                processingVideos.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-film"></i>
+                        <p>No videos are currently processing</p>
+                    </div>
+                `;
+            }
+            
+            if (readyCount === 0) {
+                readyVideos.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-video"></i>
+                        <p>You haven't uploaded any videos yet</p>
+                    </div>
+                `;
+            }
+            
+            // Hide processing section if empty
+            processingSection.style.display = processingCount > 0 ? 'block' : 'none';
         }
         
         // Create video card element
-        function createVideoCard(video) {
+        function createVideoCard(video, status) {
             const card = document.createElement('div');
             card.className = 'video-card';
             card.dataset.videoId = video.id;
             
-            // Format duration
-            const duration = formatDuration(video.duration);
+            // Format duration if available
+            const duration = video.duration ? formatDuration(video.duration) : '00:00';
+            
+            // Default thumbnail or a placeholder
+            const thumbnailUrl = video.thumbnail_url || `https://via.placeholder.com/640x360?text=${encodeURIComponent(video.title)}`;
             
             card.innerHTML = `
                 <div class="thumbnail">
-                    <img src="${video.thumbnail || '/placeholder-thumbnail.jpg'}" alt="${video.title}">
-                    ${video.status === 'processing' ? `
+                    <img src="${thumbnailUrl}" alt="${video.title}">
+                    ${status === 'processing' ? `
                         <div class="processing-overlay">
                             <div class="spinner"></div>
                             <p>Processing...</p>
@@ -668,26 +764,61 @@
                     <h3 class="video-title">${video.title}</h3>
                     <div class="video-meta">
                         <span>${duration}</span>
-                        <span>${video.height}p</span>
+                        ${video.height ? `<span>${video.height}p</span>` : ''}
                     </div>
                 </div>
             `;
             
             // Add click event only for ready videos
-            if (video.status === 'ready') {
-                card.addEventListener('click', () => playVideo(video));
+            if (status === 'ready') {
+                card.addEventListener('click', () => getVideoPlaybackUrl(video.id));
             }
             
             return card;
         }
         
-        // Play video in modal
+        // Get video playback URL from delivery service
+        async function getVideoPlaybackUrl(videoId) {
+            try {
+                // Get playback URL from delivery service
+                const response = await fetch(`${GET_PLAYBACK_URL_ENDPOINT}/${videoId}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to get video playback URL');
+                }
+                
+                const videoData = await response.json();
+                
+                // Get video details from upload service
+                const detailsResponse = await fetch(`${GET_VIDEOS_ENDPOINT}/${videoId}`);
+                const videoDetails = await detailsResponse.json();
+                
+                // Combine data and play video
+                playVideo({
+                    ...videoDetails,
+                    playback_url: videoData.playback_url // This should be the presigned URL from your delivery service
+                });
+                
+            } catch (error) {
+                console.error('Error getting playback URL:', error);
+                alert('Could not load the video. Please try again.');
+            }
+        }
+        
+        // Play video in modal using HLS.js
         function playVideo(video) {
             modalVideoTitle.textContent = video.title;
-            videoDuration.textContent = `Duration: ${formatDuration(video.duration)}`;
-            videoResolution.textContent = `Resolution: ${video.height}p`;
+            videoDuration.textContent = video.duration ? `Duration: ${formatDuration(video.duration)}` : 'Duration: --:--';
+            videoResolution.textContent = video.height ? `Resolution: ${video.height}p` : 'Resolution: --';
+            videoDescription.textContent = video.description || 'No description available';
             
-            const playbackUrl = video.playback_urls.hls;
+            // Get the HLS playback URL from your delivery service
+            const playbackUrl = video.playback_url;
+            
+            if (!playbackUrl) {
+                alert('Playback URL not available');
+                return;
+            }
             
             if (Hls.isSupported()) {
                 const hls = new Hls();
@@ -708,47 +839,6 @@
             }
             
             videoModal.style.display = 'block';
-        }
-        
-        // For demo, display sample videos
-        function displaySampleVideos() {
-            const sampleVideos = [
-                {
-                    id: 'sample1',
-                    title: 'Mountain Landscapes',
-                    status: 'ready',
-                    duration: 425,
-                    width: 1920,
-                    height: 1080,
-                    thumbnail: 'https://via.placeholder.com/640x360?text=Mountain+Video',
-                    playback_urls: {
-                        hls: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8'
-                    }
-                },
-                {
-                    id: 'sample2',
-                    title: 'Ocean Documentary',
-                    status: 'ready',
-                    duration: 310,
-                    width: 1280,
-                    height: 720,
-                    thumbnail: 'https://via.placeholder.com/640x360?text=Ocean+Video',
-                    playback_urls: {
-                        hls: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8'
-                    }
-                },
-                {
-                    id: 'sample3',
-                    title: 'Wildlife Adventures',
-                    status: 'processing',
-                    duration: 0,
-                    width: 0,
-                    height: 0,
-                    thumbnail: 'https://via.placeholder.com/640x360?text=Wildlife+Video'
-                }
-            ];
-            
-            displayVideos(sampleVideos);
         }
         
         // Helper functions

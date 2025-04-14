@@ -11,8 +11,9 @@ from loguru import logger
 import time
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import urllib.parse
+from datetime import datetime
 
 # Initialize FastAPI app
 app = FastAPI(title="Video Delivery Service")
@@ -36,13 +37,16 @@ videos_collection = db["videos"]
 # Get configuration from environment
 processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
 cdn_domain = os.getenv("CDN_DOMAIN", None)  # Optional CDN domain
-use_presigned_urls = os.getenv("USE_PRESIGNED_URLS", "false").lower() == "true"
+use_presigned_urls = os.getenv("USE_PRESIGNED_URLS", "true").lower() == "true"
 presigned_url_expiry = int(os.getenv("PRESIGNED_URL_EXPIRY", "300"))  # 5 minutes default
 
 # Cache for video metadata to reduce MongoDB load
 video_cache = {}
 cache_ttl = 300  # 5 minutes
 cache_last_cleanup = time.time()
+
+# Flag to control MongoDB polling
+polling_active = True
 
 @app.middleware("http")
 async def add_cache_control_headers(request: Request, call_next):
@@ -121,6 +125,121 @@ async def get_video_metadata(video_id: str) -> Dict[str, Any]:
     }
     
     return video
+
+async def generate_playback_urls(video_id: str) -> Dict[str, str]:
+    """
+    Generate playback URLs for a video.
+    
+    Args:
+        video_id: The ID of the video
+        
+    Returns:
+        Dict with playback URLs
+    """
+    # Check if the master playlist exists in S3
+    master_playlist_key = f"{video_id}/master.m3u8"
+    
+    try:
+        # Verify the master playlist exists
+        await asyncio.to_thread(
+            s3_client.head_object,
+            Bucket=processed_bucket,
+            Key=master_playlist_key
+        )
+        
+        base_url = f"https://{processed_bucket}.s3.amazonaws.com/{video_id}"
+        api_url = f"/api/videos/{video_id}"
+        
+        if use_presigned_urls:
+            # Generate presigned URL for the master playlist
+            presigned_url = await get_presigned_url(processed_bucket, master_playlist_key)
+            hls_url = presigned_url
+        else:
+            # Use direct S3 URL or API URL
+            if cdn_domain:
+                hls_url = f"https://{cdn_domain}/{video_id}/master.m3u8"
+            else:
+                hls_url = f"{api_url}/manifest/master.m3u8"
+        
+        return {
+            "hls": hls_url,
+            "dash": None  # DASH not implemented yet
+        }
+    
+    except ClientError as e:
+        logger.error(f"Error checking master playlist for video {video_id}: {str(e)}")
+        return {}
+
+async def update_video_playback_urls(video_id: str):
+    """
+    Update the playback URLs for a video in MongoDB.
+    
+    Args:
+        video_id: The ID of the video
+    """
+    try:
+        # Generate playback URLs
+        playback_urls = await generate_playback_urls(video_id)
+        
+        if not playback_urls:
+            logger.warning(f"Could not generate playback URLs for video {video_id}")
+            return
+        
+        # Update MongoDB
+        await asyncio.to_thread(
+            videos_collection.update_one,
+            {"_id": video_id},
+            {"$set": {
+                "playback_urls": playback_urls,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+        
+        logger.info(f"Updated playback URLs for video {video_id}")
+        
+        # Update cache if present
+        if video_id in video_cache:
+            video_cache[video_id]["data"]["playback_urls"] = playback_urls
+            video_cache[video_id]["data"]["updated_at"] = datetime.utcnow()
+    
+    except Exception as e:
+        logger.error(f"Error updating playback URLs for video {video_id}: {str(e)}")
+
+async def poll_ready_videos():
+    """
+    Continuously poll for videos with 'ready' status but no playback URLs.
+    """
+    global polling_active
+    
+    logger.info("Starting MongoDB polling for ready videos")
+    
+    while polling_active:
+        try:
+            # Find videos with 'ready' status but no playback_urls
+            videos = await asyncio.to_thread(
+                lambda: list(videos_collection.find({
+                    "status": "ready",
+                    "$or": [
+                        {"playback_urls": {"$exists": False}},
+                        {"playback_urls.hls": {"$exists": False}},
+                        {"playback_urls.hls": None}
+                    ]
+                }))
+            )
+            
+            if videos:
+                logger.info(f"Found {len(videos)} videos needing playback URL generation")
+                
+                for video in videos:
+                    video_id = video.get("_id")
+                    await update_video_playback_urls(video_id)
+            
+            # Sleep before next poll
+            await asyncio.sleep(5)
+            
+        except Exception as e:
+            logger.error(f"Error in MongoDB polling: {str(e)}")
+            await asyncio.sleep(5)  # Sleep on error before retry
 
 async def get_presigned_url(bucket: str, key: str, expires_in: int = presigned_url_expiry) -> str:
     """
@@ -224,6 +343,12 @@ async def get_video_info(video_id: str):
     """
     video = await get_video_metadata(video_id)
     
+    # If no playback URLs, try to generate them
+    if not video.get("playback_urls") or not video.get("playback_urls", {}).get("hls"):
+        await update_video_playback_urls(video_id)
+        # Refresh video metadata
+        video = await get_video_metadata(video_id)
+    
     # Filter sensitive information
     safe_video = {
         "id": video_id,
@@ -256,15 +381,15 @@ async def get_playback_url(video_id: str, redirect: bool = False):
     playback_urls = video.get("playback_urls", {})
     hls_url = playback_urls.get("hls")
     
+    # If no HLS URL, try to generate one
+    if not hls_url:
+        await update_video_playback_urls(video_id)
+        video = await get_video_metadata(video_id)
+        playback_urls = video.get("playback_urls", {})
+        hls_url = playback_urls.get("hls")
+    
     if not hls_url:
         raise HTTPException(status_code=400, detail="No HLS playback URL available")
-    
-    # If using a CDN, replace the S3 URL with the CDN URL
-    if cdn_domain:
-        # Extract the path part from the S3 URL
-        parsed_url = urllib.parse.urlparse(hls_url)
-        path = parsed_url.path.lstrip('/')
-        hls_url = f"https://{cdn_domain}/{path}"
     
     if redirect:
         return RedirectResponse(url=hls_url)
@@ -322,10 +447,61 @@ async def serve_segment(video_id: str, resolution: str, segment_file: str, reque
         # Stream the content directly
         return await stream_s3_object(processed_bucket, s3_key, dict(request.headers))
 
+@app.get("/videos/check-ready")
+async def check_ready_videos():
+    """
+    Manually trigger checking for ready videos.
+    
+    Returns:
+        Status of the operation
+    """
+    try:
+        # Find videos with 'ready' status but no playback URLs
+        videos = await asyncio.to_thread(
+            lambda: list(videos_collection.find({
+                "status": "ready",
+                "$or": [
+                    {"playback_urls": {"$exists": False}},
+                    {"playback_urls.hls": {"$exists": False}},
+                    {"playback_urls.hls": None}
+                ]
+            }))
+        )
+        
+        processed = []
+        
+        for video in videos:
+            video_id = video.get("_id")
+            await update_video_playback_urls(video_id)
+            processed.append(video_id)
+        
+        return {
+            "status": "success",
+            "message": f"Processed {len(processed)} videos",
+            "processed_videos": processed
+        }
+    
+    except Exception as e:
+        logger.error(f"Error in manual check: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing videos: {str(e)}")
+
 @app.get("/healthcheck")
 async def healthcheck():
     """Health check endpoint."""
     return {"status": "ok", "service": "video-delivery"}
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on application startup."""
+    asyncio.create_task(poll_ready_videos())
+    logger.info("Video Delivery Service started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources on application shutdown."""
+    global polling_active
+    polling_active = False
+    logger.info("Video Delivery Service shutting down")
 
 if __name__ == "__main__":
     import uvicorn
