@@ -34,7 +34,7 @@ class TranscodingService:
         self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
         
         # Connect to MongoDB directly
-        mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+        mongo_uri = os.getenv("MONGO_URI", "localhost:27017")
         self.mongo_client = pymongo.MongoClient(mongo_uri)
         self.db = self.mongo_client[os.getenv("MONGODB_DATABASE", "video_platform")]
         self.videos_collection = self.db["videos"]
