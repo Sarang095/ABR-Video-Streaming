@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Platform</title>
+    <!-- Add HLS.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.0/hls.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2980b9;
+            --background-color: #f5f7fa;
+            --card-color: #ffffff;
+            --text-color: #333333;
+            --border-radius: 8px;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #777;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: var(--card-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .upload-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #ddd;
+            border-radius: var(--border-radius);
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+
+        .upload-area i {
+            font-size: 48px;
+            color: #ccc;
+            margin-bottom: 15px;
+        }
+
+        .upload-area p {
+            margin-bottom: 10px;
+            color: #777;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            background-color: var(--secondary-color);
+        }
+
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .progress-area {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            height: 10px;
+            background-color: #eee;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .video-card {
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            background-color: white;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease;
+        }
+
+        .video-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .video-thumbnail {
+            position: relative;
+            height: 160px;
+            background-color: #eee;
+            overflow: hidden;
+        }
+
+        .video-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-duration {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .video-info {
+            padding: 15px;
+        }
+
+        .video-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .video-status {
+            font-size: 12px;
+            color: #777;
+            margin-bottom: 5px;
+        }
+
+        .status-ready {
+            color: green;
+        }
+
+        .status-processing {
+            color: orange;
+        }
+
+        .status-error {
+            color: red;
+        }
+
+        .video-player-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-player-container {
+            width: 80%;
+            max-width: 900px;
+            background-color: black;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .loading-spinner {
+            display: none;
+            margin: 20px auto;
+            border: 5px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 5px solid var(--primary-color);
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #777;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #ddd;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: white;
+            border-left: 4px solid var(--primary-color);
+            box-shadow: var(--shadow);
+            border-radius: var(--border-radius);
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            z-index: 1001;
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* For tablets */
+        @media (max-width: 768px) {
+            .video-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+        }
+
+        /* For mobile phones */
+        @media (max-width: 480px) {
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .video-player-container {
+                width: 95%;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Video Platform</h1>
+            <p>Upload and share your videos easily</p>
+        </header>
+
+        <!-- Upload Section -->
+        <div class="card">
+            <h2 class="card-title">Upload Video</h2>
+            <form id="upload-form">
+                <div class="upload-area" id="drop-area">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Drag & drop your video here</p>
+                    <p>or</p>
+                    <input type="file" id="file-input" accept="video/*" style="display:none;">
+                    <button type="button" class="btn" id="browse-btn">Browse Files</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="video-title">Title</label>
+                    <input type="text" id="video-title" class="form-control" placeholder="Enter video title" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="video-description">Description (Optional)</label>
+                    <textarea id="video-description" class="form-control" rows="3" placeholder="Enter video description"></textarea>
+                </div>
+                
+                <button type="submit" class="btn" id="upload-btn" disabled>Upload Video</button>
+                
+                <div class="progress-area" id="progress-area">
+                    <div class="progress-bar">
+                        <div class="progress" id="upload-progress"></div>
+                    </div>
+                    <p id="progress-status">Uploading... 0%</p>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Videos Section -->
+        <div class="card">
+            <h2 class="card-title">Your Videos</h2>
+            <div class="loading-spinner" id="videos-loading"></div>
+            <div class="video-grid" id="video-grid"></div>
+            <div class="empty-state" id="empty-state">
+                <i class="fas fa-video-slash"></i>
+                <p>No videos found. Upload your first video!</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Video Player Modal -->
+    <div class="video-player-modal" id="video-modal">
+        <div class="video-player-container">
+            <span class="close-modal" id="close-modal">&times;</span>
+            <video id="video-player" controls></video>
+        </div>
+    </div>
+    
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        <p id="notification-text"></p>
+    </div>
+    
+    <script>
+        // Set the API base URL
+        const API_BASE_URL = 'http://52.203.228.219:8000';
+        const API_BASE_URL2 = 'http://52.203.228.219:8001';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('file-input');
+            const browseBtn = document.getElementById('browse-btn');
+            const uploadForm = document.getElementById('upload-form');
+            const uploadBtn = document.getElementById('upload-btn');
+            const titleInput = document.getElementById('video-title');
+            const descriptionInput = document.getElementById('video-description');
+            const progressArea = document.getElementById('progress-area');
+            const progressBar = document.getElementById('upload-progress');
+            const progressStatus = document.getElementById('progress-status');
+            const videoGrid = document.getElementById('video-grid');
+            const emptyState = document.getElementById('empty-state');
+            const loadingSpinner = document.getElementById('videos-loading');
+            const videoModal = document.getElementById('video-modal');
+            const videoPlayer = document.getElementById('video-player');
+            const closeModal = document.getElementById('close-modal');
+            const notification = document.getElementById('notification');
+            const notificationText = document.getElementById('notification-text');
+            
+            let selectedFile = null;
+            let hls = null; // HLS.js instance
+            
+            // Event listeners for drag and drop
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropArea.style.borderColor = '#3498db';
+                dropArea.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
+            }
+            
+            function unhighlight() {
+                dropArea.style.borderColor = '#ddd';
+                dropArea.style.backgroundColor = 'transparent';
+            }
+            
+            // Handle file drop
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0 && files[0].type.startsWith('video/')) {
+                    handleFiles(files);
+                } else {
+                    showNotification('Please select a valid video file.');
+                }
+            }
+            
+            // Browse button click
+            browseBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            // File input change
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    handleFiles(this.files);
+                }
+            });
+            
+            // Handle files
+            function handleFiles(files) {
+                selectedFile = files[0];
+                dropArea.querySelector('p').textContent = `Selected: ${selectedFile.name}`;
+                dropArea.querySelector('i').className = 'fas fa-check-circle';
+                dropArea.querySelector('i').style.color = '#2ecc71';
+                
+                // Enable upload button if title is not empty
+                checkUploadButton();
+            }
+            
+            // Check if upload button should be enabled
+            titleInput.addEventListener('input', checkUploadButton);
+            
+            function checkUploadButton() {
+                uploadBtn.disabled = !(selectedFile && titleInput.value.trim() !== '');
+            }
+            
+            // Handle form submit
+            uploadForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                if (!selectedFile) {
+                    showNotification('Please select a video file.');
+                    return;
+                }
+                
+                // Create FormData
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('title', titleInput.value.trim());
+                
+                if (descriptionInput.value.trim() !== '') {
+                    formData.append('description', descriptionInput.value.trim());
+                }
+                
+                // Show progress area
+                progressArea.style.display = 'block';
+                uploadBtn.disabled = true;
+                
+                try {
+                    // Set up progress tracking
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `${API_BASE_URL}/api/videos/upload`, true);
+                    
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                            const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            progressBar.style.width = percentComplete + '%';
+                            progressStatus.textContent = `Uploading... ${percentComplete}%`;
+                        }
+                    };
+                    
+                    xhr.onload = function() {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const data = JSON.parse(xhr.responseText);
+                            
+                            // Show success message
+                            progressStatus.textContent = 'Upload complete! Processing video...';
+                            progressBar.style.width = '100%';
+                            
+                            showNotification('Video uploaded successfully! It will be available shortly.');
+                            
+                            // Reset form
+                            setTimeout(() => {
+                                resetUploadForm();
+                                // Refresh video list
+                                fetchVideos();
+                                
+                                // Start polling for status
+                                pollVideoStatus(data.video_id);
+                            }, 2000);
+                        } else {
+                            let errorMsg = 'Upload failed';
+                            try {
+                                const response = JSON.parse(xhr.responseText);
+                                errorMsg = response.detail || errorMsg;
+                            } catch (e) {}
+                            
+                            progressStatus.textContent = `Error: ${errorMsg}`;
+                            progressStatus.style.color = 'red';
+                            showNotification(`Upload failed: ${errorMsg}`);
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        progressStatus.textContent = 'Connection error occurred';
+                        progressStatus.style.color = 'red';
+                        showNotification('Connection error occurred during upload');
+                    };
+                    
+                    xhr.send(formData);
+                    
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    progressStatus.textContent = `Error: ${error.message}`;
+                    progressStatus.style.color = 'red';
+                    showNotification(`Upload failed: ${error.message}`);
+                }
+            });
+            
+            // Reset upload form
+            function resetUploadForm() {
+                selectedFile = null;
+                uploadForm.reset();
+                dropArea.querySelector('p').textContent = 'Drag & drop your video here';
+                dropArea.querySelector('i').className = 'fas fa-cloud-upload-alt';
+                dropArea.querySelector('i').style.color = '#ccc';
+                progressArea.style.display = 'none';
+                progressBar.style.width = '0%';
+                progressStatus.textContent = 'Uploading... 0%';
+                progressStatus.style.color = 'inherit';
+                uploadBtn.disabled = true;
+            }
+            
+            // Show notification
+            function showNotification(message) {
+                notificationText.textContent = message;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 5000);
+            }
+            
+            // Fetch videos
+            async function fetchVideos() {
+                try {
+                    loadingSpinner.style.display = 'block';
+                    videoGrid.innerHTML = '';
+                    
+                    // For demo purposes - in real app, you'd have an endpoint to list all videos
+                    // const response = await fetch(`${API_BASE_URL}/videos/list`);
+                    // const videos = await response.json();
+                    
+                    // For demo, use sample videos from localStorage (or initialize with examples)
+                    let videos = JSON.parse(localStorage.getItem('videos') || '[]');
+                    
+                    // If no videos in localStorage and this is first run, add sample videos
+                    if (videos.length === 0 && !localStorage.getItem('initialized')) {
+                        videos = addExampleVideos();
+                        localStorage.setItem('initialized', 'true');
+                    }
+                    
+                    if (videos.length === 0) {
+                        emptyState.style.display = 'block';
+                    } else {
+                        emptyState.style.display = 'none';
+                        renderVideos(videos);
+                    }
+                    
+                } catch (error) {
+                    console.error('Error fetching videos:', error);
+                    showNotification('Failed to load videos.');
+                } finally {
+                    loadingSpinner.style.display = 'none';
+                }
+            }
+            
+            // Render videos
+            function renderVideos(videos) {
+                videoGrid.innerHTML = '';
+                
+                videos.forEach(video => {
+                    const videoElement = createVideoElement(video);
+                    videoGrid.appendChild(videoElement);
+                });
+            }
+            
+            // Create video element
+            function createVideoElement(video) {
+                const videoCard = document.createElement('div');
+                videoCard.className = 'video-card';
+                videoCard.dataset.videoId = video.id;
+                
+                let statusClass = '';
+                switch (video.status) {
+                    case 'ready':
+                        statusClass = 'status-ready';
+                        break;
+                    case 'processing':
+                    case 'uploading':
+                        statusClass = 'status-processing';
+                        break;
+                    default:
+                        statusClass = 'status-error';
+                }
+                
+                videoCard.innerHTML = `
+                    <div class="video-thumbnail">
+                        <img src="${video.thumbnail || '/api/placeholder/400/320'}" alt="${video.title}">
+                        <span class="video-duration">${formatDuration(video.duration || 0)}</span>
+                    </div>
+                    <div class="video-info">
+                        <h3 class="video-title">${video.title}</h3>
+                        <p class="video-status ${statusClass}">${formatStatus(video.status)}</p>
+                    </div>
+                `;
+                
+                // Add click event only if video is ready
+                if (video.status === 'ready') {
+                    videoCard.addEventListener('click', () => playVideo(video.id));
+                }
+                
+                return videoCard;
+            }
+            
+            // Format video duration
+            function formatDuration(seconds) {
+                if (!seconds) return '0:00';
+                
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            // Format video status
+            function formatStatus(status) {
+                switch (status) {
+                    case 'ready':
+                        return 'Ready to play';
+                    case 'processing':
+                        return 'Processing...';
+                    case 'uploading':
+                        return 'Uploading...';
+                    case 'error':
+                        return 'Error';
+                    default:
+                        return status;
+                }
+            }
+            
+            // Play video using HLS.js
+            async function playVideo(videoId) {
+                try {
+                    // Fetch playback URL
+                    const response = await fetch(`${API_BASE_URL2}/videos/${videoId}/play`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to get playback URL');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (!data.playback_url) {
+                        throw new Error('Playback URL not available');
+                    }
+                    
+                    // Display the modal
+                    videoModal.style.display = 'flex';
+                    
+                    // Check if HLS.js is supported
+                    if (Hls.isSupported()) {
+                        // If we had a previous instance, destroy it
+                        if (hls) {
+                            hls.destroy();
+                        }
+                        
+                        // Create a new HLS instance
+                        hls = new Hls({
+                            debug: false,
+                            enableWorker: true
+                        });
+                        
+                        // Bind HLS to video element
+                        hls.loadSource(data.playback_url);
+                        hls.attachMedia(videoPlayer);
+                        
+                        // Play when manifest is loaded
+                        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                            videoPlayer.play().catch(error => {
+                                console.warn('Auto-play prevented:', error);
+                                // Show play button or instruction
+                            });
+                        });
+                        
+                        // Handle errors
+                        hls.on(Hls.Events.ERROR, function(event, data) {
+                            if (data.fatal) {
+                                switch(data.type) {
+                                    case Hls.ErrorTypes.NETWORK_ERROR:
+                                        console.error('Fatal network error', data);
+                                        hls.startLoad(); // Try to recover
+                                        break;
+                                    case Hls.ErrorTypes.MEDIA_ERROR:
+                                        console.error('Fatal media error', data);
+                                        hls.recoverMediaError(); // Try to recover
+                                        break;
+                                    default:
+                                        // Cannot recover
+                                        hls.destroy();
+                                        showNotification('Video playback error. Please try again later.');
+                                        break;
+                                }
+                            }
+                        });
+                    } 
+                    // For browsers with native HLS support (Safari, iOS)
+                    else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                        videoPlayer.src = data.playback_url;
+                        videoPlayer.addEventListener('loadedmetadata', function() {
+                            videoPlayer.play().catch(error => {
+                                console.warn('Auto-play prevented:', error);
+                            });
+                        });
+                    } 
+                    // No HLS support
+                    else {
+                        showNotification('Your browser does not support HLS video playback.');
+                    }
+                } catch (error) {
+                    console.error('Error playing video:', error);
+                    showNotification(`Failed to play video: ${error.message}`);
+                }
+            }
+            
+            // Close video modal
+            closeModal.addEventListener('click', () => {
+                closeVideoPlayer();
+            });
+            
+            // Close modal on click outside
+            videoModal.addEventListener('click', (e) => {
+                if (e.target === videoModal) {
+                    closeVideoPlayer();
+                }
+            });
+            
+            // Clean up video player resources
+            function closeVideoPlayer() {
+                videoPlayer.pause();
+                
+                if (hls) {
+                    hls.destroy();
+                    hls = null;
+                }
+                
+                videoPlayer.src = '';
+                videoModal.style.display = 'none';
+            }
+            
+            // Poll video status
+            async function pollVideoStatus(videoId) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/videos/${videoId}/status`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to get video status');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // If video is ready, update UI
+                    if (data.status === 'ready') {
+                        // Save video to local storage for demo
+                        saveVideoToLocalStorage(data);
+                        // Refresh video list
+                        fetchVideos();
+                        return;
+                    }
+                    
+                    // If still processing, poll again after 5 seconds
+                    if (data.status === 'processing' || data.status === 'uploading') {
+                        setTimeout(() => pollVideoStatus(videoId), 5000);
+                    }
+                } catch (error) {
+                    console.error('Error polling video status:', error);
+                }
+            }
+            
+            // Save video to local storage (for demo)
+            function saveVideoToLocalStorage(video) {
+                const videos = JSON.parse(localStorage.getItem('videos') || '[]');
+                
+                // Check if video already exists
+                const index = videos.findIndex(v => v.id === video.id);
+                
+                if (index !== -1) {
+                    // Update existing video
+                    videos[index] = { ...videos[index], ...video };
+                } else {
+                    // Add new video
+                    videos.push(video);
+                }
+                
+                localStorage.setItem('videos', JSON.stringify(videos));
+            }
+            
+            // Add example videos for demo
+            function addExampleVideos() {
+                const exampleVideos = [
+                    {
+                        id: '1234-5678-abcd',
+                        title: 'Introduction to Video Platform',
+                        duration: 125,
+                        status: 'ready',
+                        thumbnail: '/api/placeholder/400/320'
+                    },
+                    {
+                        id: '5678-abcd-efgh',
+                        title: 'How to Upload Videos',
+                        duration: 74,
+                        status: 'ready',
+                        thumbnail: '/api/placeholder/400/320'
+                    }
+                ];
+                
+                localStorage.setItem('videos', JSON.stringify(exampleVideos));
+                return exampleVideos;
+            }
+            
+            // Initial setup
+            fetchVideos(); // Load videos
+        });
+    </script>
+</body>
+</html>
