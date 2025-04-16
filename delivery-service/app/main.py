@@ -16,14 +16,15 @@ import urllib.parse
 # Initialize FastAPI app
 app = FastAPI(title="Video Delivery Service")
 
-# Add CORS middleware for browser access
+# Add CORS middleware for browser access with more permissive settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, restrict to your domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Length", "Content-Range", "Accept-Ranges"]
+    expose_headers=["Content-Length", "Content-Range", "Accept-Ranges", "ETag"],
+    max_age=86400  # Cache preflight requests for 24 hours
 )
 
 # Initialize clients
@@ -56,9 +57,13 @@ async def add_cache_control_headers(request: Request, call_next):
         # Segments - longer cache time as they don't change
         response.headers["Cache-Control"] = "public, max-age=31536000"  # 1 year
     
-    # Add CORS headers for video content
-    if path.endswith((".m3u8", ".ts")):
+    # Add CORS headers for video content for ALL responses
+    # This ensures CORS headers are present even for error responses
+    if path.endswith((".m3u8", ".ts")) or "videos" in path:
         response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Range, Accept-Ranges, ETag"
     
     return response
 
@@ -227,7 +232,11 @@ async def stream_s3_object(bucket: str, key: str, request_headers: Dict[str, str
         headers = {
             'Content-Type': content_type,
             'Content-Length': str(content_length),
-            'Accept-Ranges': 'bytes'
+            'Accept-Ranges': 'bytes',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': '*',
+            'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, ETag'
         }
         
         # Add ETag for caching if available
@@ -326,6 +335,21 @@ async def startup_event():
     asyncio.create_task(poll_sqs_queue())
     logger.info("Video delivery service started")
 
+# Add OPTIONS route handlers for CORS preflight requests
+@app.options("/videos/{video_id}")
+@app.options("/videos/{video_id}/play")
+@app.options("/videos/{video_id}/manifest/{file_path:path}")
+@app.options("/videos/{video_id}/segments/{resolution}/{segment_file:path}")
+async def options_route():
+    """Handle OPTIONS preflight requests for CORS."""
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Max-Age": "86400",  # Cache preflight for 24 hours
+    }
+    return Response(status_code=204, headers=headers)
+
 @app.get("/videos/{video_id}")
 async def get_video_info(video_id: str):
     """
@@ -352,7 +376,14 @@ async def get_video_info(video_id: str):
         "playback_urls": video.get("playback_urls", {})
     }
     
-    return JSONResponse(safe_video)
+    return JSONResponse(
+        content=safe_video,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
 
 @app.get("/videos/{video_id}/play")
 async def get_playback_url(video_id: str, redirect: bool = False):
@@ -383,9 +414,21 @@ async def get_playback_url(video_id: str, redirect: bool = False):
         hls_url = f"https://{cdn_domain}/{path}"
     
     if redirect:
-        return RedirectResponse(url=hls_url)
+        response = RedirectResponse(url=hls_url)
+        # Add CORS headers to redirect
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
     
-    return {"playback_url": hls_url}
+    return JSONResponse(
+        content={"playback_url": hls_url},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
 
 @app.get("/videos/{video_id}/manifest/{file_path:path}")
 async def serve_manifest(video_id: str, file_path: str, request: Request):
@@ -408,7 +451,12 @@ async def serve_manifest(video_id: str, file_path: str, request: Request):
     if use_presigned_urls:
         # Generate a presigned URL and redirect
         url = await get_presigned_url(processed_bucket, s3_key)
-        return RedirectResponse(url=url)
+        response = RedirectResponse(url=url)
+        # Add CORS headers to redirect
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
     else:
         # Stream the content directly
         return await stream_s3_object(processed_bucket, s3_key, dict(request.headers))
@@ -435,7 +483,12 @@ async def serve_segment(video_id: str, resolution: str, segment_file: str, reque
     if use_presigned_urls:
         # Generate a presigned URL and redirect
         url = await get_presigned_url(processed_bucket, s3_key)
-        return RedirectResponse(url=url)
+        response = RedirectResponse(url=url)
+        # Add CORS headers to redirect
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
     else:
         # Stream the content directly
         return await stream_s3_object(processed_bucket, s3_key, dict(request.headers))
