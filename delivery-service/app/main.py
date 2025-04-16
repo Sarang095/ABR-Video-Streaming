@@ -29,6 +29,7 @@ app.add_middleware(
 
 # Initialize clients
 s3_client = boto3.client('s3', region_name=os.getenv("AWS_REGION", "us-east-1"))
+sqs_client = boto3.client('sqs', region_name=os.getenv("AWS_REGION", "us-east-1"))
 mongo_client = pymongo.MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017"))
 db = mongo_client[os.getenv("MONGODB_DATABASE", "video_platform")]
 videos_collection = db["videos"]
@@ -38,6 +39,7 @@ processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
 cdn_domain = os.getenv("CDN_DOMAIN", None)  # Optional CDN domain
 use_presigned_urls = os.getenv("USE_PRESIGNED_URLS", "false").lower() == "true"
 presigned_url_expiry = int(os.getenv("PRESIGNED_URL_EXPIRY", "300"))  # 5 minutes default
+delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
 
 # Cache for video metadata to reduce MongoDB load
 video_cache = {}
@@ -102,7 +104,7 @@ async def get_video_metadata(video_id: str) -> Dict[str, Any]:
         if time.time() - cache_data["timestamp"] < cache_ttl:
             return cache_data["data"]
     
-    # Get from MongoDB
+    # Get from MongoDB - make sure to use the string ID as stored in MongoDB
     video = await asyncio.to_thread(
         videos_collection.find_one,
         {"_id": video_id}
@@ -210,6 +212,78 @@ async def stream_s3_object(bucket: str, key: str, request_headers: Dict[str, str
             raise HTTPException(status_code=404, detail="Resource not found")
         logger.error(f"Error streaming from S3: {str(e)}")
         raise HTTPException(status_code=500, detail="Error accessing content")
+
+async def poll_sqs_queue():
+    """
+    Poll SQS queue for video processing notifications.
+    This runs as a background task to receive updates from the transcoding service.
+    """
+    logger.info("Starting SQS polling task")
+    
+    while True:
+        try:
+            # Receive messages from SQS queue
+            response = await asyncio.to_thread(
+                sqs_client.receive_message,
+                QueueUrl=delivery_queue_url,
+                MaxNumberOfMessages=10,
+                WaitTimeSeconds=20  # Long polling
+            )
+            
+            if "Messages" in response:
+                for message in response["Messages"]:
+                    try:
+                        # Parse message body
+                        body = json.loads(message["Body"])
+                        video_id = body.get("video_id")
+                        status = body.get("status")
+                        
+                        if video_id:
+                            logger.info(f"Received message for video {video_id} with status {status}")
+                            
+                            if status == "ready":
+                                # Pre-warm the cache for this video
+                                try:
+                                    # Clear from cache if it exists to force a refresh
+                                    if video_id in video_cache:
+                                        del video_cache[video_id]
+                                    
+                                    # Try to get video metadata to cache it
+                                    await get_video_metadata(video_id)
+                                    logger.info(f"Video {video_id} is now ready for delivery")
+                                except Exception as e:
+                                    logger.error(f"Error pre-warming cache for video {video_id}: {str(e)}")
+                            
+                            elif status == "failed":
+                                error = body.get("error", "Unknown error")
+                                logger.warning(f"Video {video_id} processing failed: {error}")
+                                # Remove from cache if it exists
+                                if video_id in video_cache:
+                                    del video_cache[video_id]
+                        
+                        # Delete the message
+                        await asyncio.to_thread(
+                            sqs_client.delete_message,
+                            QueueUrl=delivery_queue_url,
+                            ReceiptHandle=message["ReceiptHandle"]
+                        )
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing SQS message: {str(e)}")
+            
+        except Exception as e:
+            logger.error(f"Error polling SQS: {str(e)}")
+            await asyncio.sleep(5)  # Backoff before retry
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    Startup event that runs when the FastAPI application starts.
+    Launches the SQS polling task in the background.
+    """
+    # Start the SQS polling task as a background task
+    asyncio.create_task(poll_sqs_queue())
+    logger.info("Video delivery service started")
 
 @app.get("/videos/{video_id}")
 async def get_video_info(video_id: str):
@@ -329,4 +403,4 @@ async def healthcheck():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

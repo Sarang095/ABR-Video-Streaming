@@ -24,14 +24,17 @@ class TranscodingService:
     4. Creating HLS segments and master playlist
     5. Uploading results back to S3
     6. Updating metadata in MongoDB directly
+    7. Sending notification to SQS queue when processing is complete
     """
     
     def __init__(self):
         """Initialize the transcoding service with required connections and utilities."""
         self.s3_client = boto3.client('s3', region_name=os.getenv("AWS_REGION", "us-east-1"))
+        self.sqs_client = boto3.client('sqs', region_name=os.getenv("AWS_REGION", "us-east-1"))
             
         self.raw_bucket = os.getenv("S3_RAW_BUCKET", "s3-raw-bucket-49")
         self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
+        self.delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
         
         # Connect to MongoDB directly
         mongo_uri = os.getenv("MONGO_URI", "localhost:27017")
@@ -75,6 +78,41 @@ class TranscodingService:
             )
         )
         logger.info(f"Updated video status to {status} for video ID: {video_id}")
+        
+        # If status is "ready" or "failed", send a message to SQS
+        if status in ["ready", "failed"]:
+            await self.send_status_to_sqs(video_id, status, error)
+    
+    async def send_status_to_sqs(self, video_id, status, error=None):
+        """
+        Send video status to SQS queue for the delivery service.
+        
+        Args:
+            video_id: The ID of the video
+            status: The status to set
+            error: Optional error message
+        """
+        message = {
+            "video_id": str(video_id),
+            "status": status,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        if error:
+            message["error"] = error
+            
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.sqs_client.send_message(
+                    QueueUrl=self.delivery_queue_url,
+                    MessageBody=json.dumps(message)
+                )
+            )
+            logger.info(f"Sent {status} notification to SQS for video ID: {video_id}")
+        except Exception as e:
+            logger.error(f"Failed to send SQS message for video {video_id}: {str(e)}")
     
     async def update_video_info(self, video_id, **kwargs):
         """
