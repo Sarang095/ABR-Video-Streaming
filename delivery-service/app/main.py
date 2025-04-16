@@ -35,7 +35,7 @@ processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
 cdn_domain = os.getenv("CDN_DOMAIN", None)  # Optional CDN domain
 use_presigned_urls = os.getenv("USE_PRESIGNED_URLS", "false").lower() == "true"
 presigned_url_expiry = int(os.getenv("PRESIGNED_URL_EXPIRY", "300"))  # 5 minutes default
-delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123456789012/video-delivery-queue")
+delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
 
 # Cache for video metadata
 video_cache = {}

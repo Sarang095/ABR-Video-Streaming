@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Upload Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         :root {
             --primary-color: #3498db;
@@ -301,8 +302,8 @@
     </div>
     
     <script>
-        const API_UPLOAD_URL = 'http://23.22.91.57:8000/api/videos/upload';
-        const DELIVERY_SERVICE_URL = 'http://23.22.91.57:8001';
+        const API_UPLOAD_URL = 'http://34.207.147.197:8000/api/videos/upload';
+        const DELIVERY_SERVICE_URL = 'http://34.207.147.197:8001';
         let uploadedVideos = [];
         
         // Handle file selection
@@ -456,13 +457,59 @@
                 if (status === 'ready' && playbackUrl) {
                     const placeholderElement = videoElement.querySelector('.video-placeholder');
                     if (placeholderElement) {
+                        // Create video element
                         const videoPlayerHtml = `
-                            <video class="video-player" controls>
-                                <source src="${playbackUrl}" type="application/x-mpegURL">
-                                Your browser does not support HTML video.
-                            </video>
+                            <video class="video-player" id="hlsPlayer-${videoId}" controls></video>
                         `;
                         placeholderElement.outerHTML = videoPlayerHtml;
+                        
+                        // Initialize HLS.js
+                        const videoElementPlayer = document.getElementById(`hlsPlayer-${videoId}`);
+                        if (Hls.isSupported()) {
+                            const hls = new Hls({
+                                debug: false,
+                                enableWorker: true
+                            });
+                            hls.loadSource(playbackUrl);
+                            hls.attachMedia(videoElementPlayer);
+                            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                                videoElementPlayer.play().catch(e => {
+                                    console.log('Auto-play prevented:', e);
+                                });
+                            });
+                            
+                            // Error handling
+                            hls.on(Hls.Events.ERROR, function(event, data) {
+                                if (data.fatal) {
+                                    console.error('HLS error:', data);
+                                    switch(data.type) {
+                                        case Hls.ErrorTypes.NETWORK_ERROR:
+                                            showAlert(`Network error while loading video: ${videoId}`, 'error');
+                                            hls.startLoad();
+                                            break;
+                                        case Hls.ErrorTypes.MEDIA_ERROR:
+                                            showAlert(`Media error while playing video: ${videoId}`, 'error');
+                                            hls.recoverMediaError();
+                                            break;
+                                        default:
+                                            showAlert(`Error playing video: ${videoId}`, 'error');
+                                            break;
+                                    }
+                                }
+                            });
+                        } 
+                        // For browsers that natively support HLS (like Safari)
+                        else if (videoElementPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                            videoElementPlayer.src = playbackUrl;
+                            videoElementPlayer.addEventListener('loadedmetadata', function() {
+                                videoElementPlayer.play().catch(e => {
+                                    console.log('Auto-play prevented:', e);
+                                });
+                            });
+                        } else {
+                            // No HLS support
+                            videoElementPlayer.outerHTML = `<div class="video-placeholder">Your browser does not support HLS streaming. Try using Safari, Chrome, or Firefox.</div>`;
+                        }
                     }
                 }
             }
@@ -474,12 +521,12 @@
             videoCard.id = `video-${video.id}`;
             videoCard.className = 'video-card';
             
-            const videoPlayer = video.playbackUrl && video.status === 'ready' 
-                ? `<video class="video-player" controls>
-                     <source src="${video.playbackUrl}" type="application/x-mpegURL">
-                     Your browser does not support HTML video.
-                   </video>`
-                : `<div class="video-placeholder">Video processing...</div>`;
+            let videoPlayer;
+            if (video.playbackUrl && video.status === 'ready') {
+                videoPlayer = `<video class="video-player" id="hlsPlayer-${video.id}" controls></video>`;
+            } else {
+                videoPlayer = `<div class="video-placeholder">Video processing...</div>`;
+            }
             
             videoCard.innerHTML = `
                 ${videoPlayer}
@@ -491,6 +538,53 @@
             `;
             
             document.getElementById('videosContainer').prepend(videoCard);
+            
+            // Initialize HLS.js for ready videos
+            if (video.playbackUrl && video.status === 'ready') {
+                initializeHlsPlayer(video.id, video.playbackUrl);
+            }
+        }
+        
+        // Initialize HLS player for a specific video
+        function initializeHlsPlayer(videoId, playbackUrl) {
+            const videoElement = document.getElementById(`hlsPlayer-${videoId}`);
+            if (!videoElement) return;
+            
+            if (Hls.isSupported()) {
+                const hls = new Hls({
+                    debug: false,
+                    enableWorker: true
+                });
+                hls.loadSource(playbackUrl);
+                hls.attachMedia(videoElement);
+                
+                // Error handling
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        console.error('HLS error:', data);
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                showAlert(`Network error while loading video: ${videoId}`, 'error');
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                showAlert(`Media error while playing video: ${videoId}`, 'error');
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                showAlert(`Error playing video: ${videoId}`, 'error');
+                                break;
+                        }
+                    }
+                });
+            } 
+            // For browsers that natively support HLS (like Safari)
+            else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+                videoElement.src = playbackUrl;
+            } else {
+                // No HLS support
+                videoElement.outerHTML = `<div class="video-placeholder">Your browser does not support HLS streaming. Try using Safari, Chrome, or Firefox.</div>`;
+            }
         }
         
         // Show an alert message
@@ -549,9 +643,20 @@
             }
         }
         
+        // Initialize all HLS players
+        function initializeAllHlsPlayers() {
+            uploadedVideos.forEach(video => {
+                if (video.status === 'ready' && video.playbackUrl) {
+                    initializeHlsPlayer(video.id, video.playbackUrl);
+                }
+            });
+        }
+        
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadVideosFromLocalStorage();
+            // Initialize any ready videos
+            setTimeout(initializeAllHlsPlayers, 500);
         });
     </script>
 </body>
