@@ -3,752 +3,290 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Upload Platform</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <title>Simple Video Platform</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.5/hls.min.js"></script>
     <style>
-        :root {
-            --primary-color: #3498db;
-            --secondary-color: #2980b9;
-            --background-color: #f5f7fa;
-            --card-color: #ffffff;
-            --text-color: #333333;
-            --border-radius: 8px;
-            --box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
         body {
-            background-color: var(--background-color);
-            color: var(--text-color);
-            line-height: 1.6;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
+            font-family: Arial, sans-serif;
+            max-width: 800px;
             margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
         }
-        
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e1e4e8;
+        h1, h2 {
+            color: #333;
         }
-        
-        h1 {
-            color: var(--primary-color);
-        }
-        
-        .upload-card {
-            background-color: var(--card-color);
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            padding: 25px;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-        
-        input[type="text"],
-        textarea {
-            width: 100%;
-            padding: 12px;
+        .card {
             border: 1px solid #ddd;
-            border-radius: var(--border-radius);
-            font-size: 16px;
-        }
-        
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-        
-        .file-input-wrapper {
-            position: relative;
+            border-radius: 8px;
+            padding: 20px;
             margin-bottom: 20px;
-            overflow: hidden;
-            display: inline-block;
-            width: 100%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
-        .file-input-label {
-            background-color: #f5f5f5;
-            border: 2px dashed #ddd;
-            border-radius: var(--border-radius);
-            padding: 40px 20px;
-            text-align: center;
-            cursor: pointer;
-            display: block;
-            transition: all 0.3s ease;
+        form {
+            display: flex;
+            flex-direction: column;
         }
-        
-        .file-input-label:hover {
-            border-color: var(--primary-color);
-        }
-        
-        .file-input {
-            opacity: 0;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-        
-        .selected-file {
+        label {
             margin-top: 10px;
-            font-style: italic;
-            color: #666;
+            font-weight: bold;
         }
-        
+        input, textarea {
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
         button {
-            background-color: var(--primary-color);
+            background-color: #4CAF50;
             color: white;
             border: none;
-            padding: 12px 20px;
-            border-radius: var(--border-radius);
+            padding: 10px 15px;
+            margin-top: 15px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
-            font-weight: 600;
-            transition: background-color 0.3s ease;
         }
-        
         button:hover {
-            background-color: var(--secondary-color);
+            background-color: #45a049;
         }
-        
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
         }
-        
-        .progress-wrapper {
-            margin-top: 20px;
-            display: none;
+        .success {
+            background-color: #d4edda;
+            color: #155724;
         }
-        
-        .progress-bar {
-            height: 10px;
-            background-color: #eee;
-            border-radius: 5px;
-            overflow: hidden;
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
         }
-        
-        .progress-fill {
-            height: 100%;
-            background-color: var(--primary-color);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        
-        .progress-text {
-            margin-top: 5px;
-            text-align: right;
-            font-size: 14px;
-        }
-        
-        .videos-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-        
-        .video-card {
-            background-color: var(--card-color);
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            overflow: hidden;
-        }
-        
-        .video-placeholder {
-            background-color: #eee;
-            height: 180px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #999;
-        }
-        
-        .video-player {
+        video {
             width: 100%;
-            height: 180px;
+            margin-top: 15px;
             background-color: #000;
         }
-        
-        .video-details {
-            padding: 15px;
+        #videoList {
+            margin-top: 30px;
         }
-        
-        .video-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 5px;
+        .video-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
         }
-        
-        .video-description {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
+        .video-item:hover {
+            background-color: #f5f5f5;
         }
-        
-        .video-status {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        
-        .status-processing {
-            background-color: #ffeaa7;
-            color: #d35400;
-        }
-        
-        .status-ready {
-            background-color: #d5f5e3;
-            color: #27ae60;
-        }
-        
-        .status-failed {
-            background-color: #fadbd8;
-            color: #c0392b;
-        }
-        
-        .alert {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: var(--border-radius);
-        }
-        
-        .alert-success {
-            background-color: #d5f5e3;
-            color: #27ae60;
-        }
-        
-        .alert-error {
-            background-color: #fadbd8;
-            color: #c0392b;
-        }
-        
-        @media (max-width: 768px) {
-            .videos-container {
-                grid-template-columns: 1fr;
-            }
+        #loadingIndicator {
+            display: none;
+            color: #555;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Video Upload Platform</h1>
-        </header>
-        
-        <div id="alertContainer"></div>
-        
-        <div class="upload-card">
-            <h2>Upload a New Video</h2>
-            <form id="uploadForm">
-                <div class="form-group">
-                    <label for="title">Title</label>
-                    <input type="text" id="title" name="title" placeholder="Enter video title" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="description">Description</label>
-                    <textarea id="description" name="description" placeholder="Enter video description"></textarea>
-                </div>
-                
-                <div class="file-input-wrapper">
-                    <label class="file-input-label">
-                        <i class="fas fa-cloud-upload-alt"></i> Drag and drop or click to select a video file
-                        <input type="file" id="videoFile" name="file" class="file-input" accept="video/*" required>
-                    </label>
-                    <div class="selected-file" id="selectedFileName">No file selected</div>
-                </div>
-                
-                <button type="submit" id="uploadButton">Upload Video</button>
-                
-                <div class="progress-wrapper" id="progressWrapper">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="progress-text" id="progressText">0%</div>
-                </div>
-            </form>
-        </div>
-        
-        <h2>Your Videos</h2>
-        <div class="videos-container" id="videosContainer">
-            <!-- Videos will be loaded here -->
+    <h1>Simple Video Platform</h1>
+
+    <div class="card">
+        <h2>Upload Video</h2>
+        <form id="uploadForm">
+            <label for="videoFile">Select Video:</label>
+            <input type="file" id="videoFile" name="file" accept="video/*" required>
+            
+            <label for="title">Title:</label>
+            <input type="text" id="title" name="title" placeholder="Enter video title" required>
+            
+            <label for="description">Description:</label>
+            <textarea id="description" name="description" rows="3" placeholder="Enter video description"></textarea>
+            
+            <button type="submit">Upload Video</button>
+        </form>
+        <div id="loadingIndicator">Uploading... please wait</div>
+        <div id="status"></div>
+    </div>
+
+    <div class="card">
+        <h2>Video Player</h2>
+        <div id="playerContainer">
+            <video id="videoPlayer" controls></video>
         </div>
     </div>
-    
+
+    <div class="card" id="videoList">
+        <h2>Your Videos</h2>
+        <div id="videoItems">
+            <p>Your uploaded videos will appear here</p>
+        </div>
+    </div>
+
     <script>
-        const API_UPLOAD_URL = 'http://34.207.147.197:8000/api/videos/upload';
-        const DELIVERY_SERVICE_URL = 'http://34.207.147.197:8001';
+        // Configuration - replace with your actual server IP
+        const API_HOST = '13.218.123.213';
+        const UPLOAD_URL = `http://13.218.123.213:8000/api/videos/upload`;
+        const DELIVERY_URL = `http://13.218.123.213:8001/videos`;
+        
+        // Store uploaded videos
         let uploadedVideos = [];
-        
-        // Handle file selection
-        document.getElementById('videoFile').addEventListener('change', function(e) {
-            const fileName = e.target.files[0] ? e.target.files[0].name : 'No file selected';
-            document.getElementById('selectedFileName').textContent = fileName;
-        });
-        
-        // Handle form submission
+
+        // Set up form submission
         document.getElementById('uploadForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const title = document.getElementById('title').value;
-            const description = document.getElementById('description').value;
-            const fileInput = document.getElementById('videoFile');
+            const statusDiv = document.getElementById('status');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            statusDiv.className = '';
+            statusDiv.textContent = '';
             
-            if (!fileInput.files[0]) {
-                showAlert('Please select a video file', 'error');
+            const formData = new FormData();
+            const fileInput = document.getElementById('videoFile');
+            const titleInput = document.getElementById('title');
+            const descriptionInput = document.getElementById('description');
+            
+            if (!fileInput.files.length) {
+                showStatus('Please select a video file', 'error');
                 return;
             }
             
-            const formData = new FormData();
-            formData.append('title', title);
-            formData.append('description', description);
             formData.append('file', fileInput.files[0]);
-            
-            showProgress();
+            formData.append('title', titleInput.value);
+            formData.append('description', descriptionInput.value);
             
             try {
-                const response = await uploadWithProgress(API_UPLOAD_URL, formData);
-                const data = await response.json();
+                loadingIndicator.style.display = 'block';
+                const response = await fetch(UPLOAD_URL, {
+                    method: 'POST',
+                    body: formData
+                });
                 
-                if (response.ok) {
-                    showAlert('Video uploaded successfully! It is now being processed.', 'success');
-                    document.getElementById('uploadForm').reset();
-                    document.getElementById('selectedFileName').textContent = 'No file selected';
-                    
-                    // Add to the UI with processing status
-                    addVideoToUI({
-                        id: data.video_id,
-                        title: title,
-                        description: description,
-                        status: 'processing'
-                    });
-                    
-                    // Save to local storage
-                    uploadedVideos.push({
-                        id: data.video_id,
-                        title: title,
-                        description: description,
-                        status: 'processing',
-                        uploaded_at: new Date().toISOString()
-                    });
-                    saveVideosToLocalStorage();
-                    
-                    // Start polling for status
-                    pollVideoStatus(data.video_id);
-                } else {
-                    showAlert(`Upload failed: ${data.detail || 'Unknown error'}`, 'error');
+                const result = await response.json();
+                loadingIndicator.style.display = 'none';
+                
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Upload failed');
                 }
+                
+                showStatus(`Video uploaded successfully! Video ID: ${result.video_id}`, 'success');
+                
+                // Add to list and start polling for processing
+                const videoInfo = {
+                    id: result.video_id,
+                    title: titleInput.value,
+                    status: 'processing'
+                };
+                uploadedVideos.push(videoInfo);
+                updateVideoList();
+                
+                // Start polling for this video
+                pollVideoStatus(result.video_id);
+                
+                // Reset form
+                document.getElementById('uploadForm').reset();
+                
             } catch (error) {
-                showAlert(`Error: ${error.message}`, 'error');
-            } finally {
-                hideProgress();
+                loadingIndicator.style.display = 'none';
+                showStatus(`Error: ${error.message}`, 'error');
             }
         });
-        
-        // Function to upload with progress tracking
-        async function uploadWithProgress(url, formData) {
-            return new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                
-                xhr.upload.addEventListener('progress', (event) => {
-                    if (event.lengthComputable) {
-                        const percentComplete = Math.round((event.loaded / event.total) * 100);
-                        updateProgress(percentComplete);
-                    }
-                });
-                
-                xhr.addEventListener('load', () => {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        resolve({
-                            ok: true,
-                            json: () => JSON.parse(xhr.responseText)
-                        });
-                    } else {
-                        resolve({
-                            ok: false,
-                            json: () => JSON.parse(xhr.responseText || '{"detail": "Server error"}')
-                        });
-                    }
-                });
-                
-                xhr.addEventListener('error', () => {
-                    reject(new Error('Network error'));
-                });
-                
-                xhr.addEventListener('abort', () => {
-                    reject(new Error('Upload aborted'));
-                });
-                
-                xhr.open('POST', url);
-                xhr.send(formData);
-            });
+
+        // Show status message
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = type;
         }
-        
-        // Poll video status
+
+        // Poll for video processing status
         async function pollVideoStatus(videoId) {
-            try {
-                const response = await fetch(`${DELIVERY_SERVICE_URL}/videos/${videoId}`);
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    // Use the delivery service to proxy content instead of direct S3 URLs
-                    const playbackUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/master.m3u8`;
-                    updateVideoStatus(videoId, data.status, playbackUrl);
-                    
-                    if (data.status === 'processing') {
-                        // Continue polling if still processing
-                        setTimeout(() => pollVideoStatus(videoId), 5000);
-                    }
-                } else {
-                    // If video not found yet, keep polling
-                    setTimeout(() => pollVideoStatus(videoId), 5000);
-                }
-            } catch (error) {
-                console.error('Error polling video status:', error);
-                // Continue polling despite errors
-                setTimeout(() => pollVideoStatus(videoId), 10000);
-            }
-        }
-        
-        // Update video status in UI and local storage
-        function updateVideoStatus(videoId, status, playbackUrl) {
-            // Update in memory
+            // Find this video in our list
             const videoIndex = uploadedVideos.findIndex(v => v.id === videoId);
-            if (videoIndex !== -1) {
-                uploadedVideos[videoIndex].status = status;
-                if (playbackUrl) {
-                    uploadedVideos[videoIndex].playbackUrl = playbackUrl;
-                }
-                saveVideosToLocalStorage();
-            }
+            if (videoIndex === -1) return;
             
-            // Update in UI
-            const videoElement = document.getElementById(`video-${videoId}`);
-            if (videoElement) {
-                const statusElement = videoElement.querySelector('.video-status');
-                statusElement.textContent = status;
-                statusElement.className = `video-status status-${status}`;
-                
-                // If ready, update player
-                if (status === 'ready' && playbackUrl) {
-                    const placeholderElement = videoElement.querySelector('.video-placeholder');
-                    if (placeholderElement) {
-                        // Create video element
-                        const videoPlayerHtml = `
-                            <video class="video-player" id="hlsPlayer-${videoId}" controls></video>
-                        `;
-                        placeholderElement.outerHTML = videoPlayerHtml;
+            try {
+                // Poll every 5 seconds until ready
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`${DELIVERY_URL}/${videoId}/play`);
                         
-                        // Initialize HLS.js
-                        const videoElementPlayer = document.getElementById(`hlsPlayer-${videoId}`);
-                        if (Hls.isSupported()) {
-                            const hls = new Hls({
-                                debug: false,
-                                enableWorker: true,
-                                // Add URL rewriting for segment requests
-                                xhrSetup: function(xhr, url) {
-                                    // If it's already using the delivery service, don't modify
-                                    if (url.includes(DELIVERY_SERVICE_URL)) {
-                                        return;
-                                    }
-                                    
-                                    // If it's a S3 URL for a segment or playlist
-                                    if (url.includes('s3.amazonaws.com')) {
-                                        // Extract the path components from the URL
-                                        const urlObj = new URL(url);
-                                        const pathParts = urlObj.pathname.split('/');
-                                        
-                                        // Extract video ID (should be right after the bucket name)
-                                        const bucketIndex = pathParts.findIndex(part => 
-                                            part === 'processed-s3-bucket-49' || part.endsWith('.s3.amazonaws.com'));
-                                        
-                                        if (bucketIndex !== -1 && bucketIndex + 1 < pathParts.length) {
-                                            const videoId = pathParts[bucketIndex + 1];
-                                            
-                                            // Check if this is a segment request
-                                            if (pathParts.includes('segments') && pathParts.length > bucketIndex + 4) {
-                                                const resolutionIndex = pathParts.indexOf('segments') + 1;
-                                                const resolution = pathParts[resolutionIndex];
-                                                const segmentPath = pathParts.slice(resolutionIndex + 1).join('/');
-                                                
-                                                // Rewrite to delivery service URL
-                                                const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/segments/${resolution}/${segmentPath}`;
-                                                xhr.open('GET', newUrl);
-                                            }
-                                            // Check if this is a playlist request
-                                            else if (url.endsWith('.m3u8')) {
-                                                const playlistPath = pathParts.slice(bucketIndex + 2).join('/');
-                                                // Rewrite to delivery service URL
-                                                const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/${playlistPath}`;
-                                                xhr.open('GET', newUrl);
-                                            }
-                                        }
-                                    }
-                                }
-                            });
-                            hls.loadSource(playbackUrl);
-                            hls.attachMedia(videoElementPlayer);
-                            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                                videoElementPlayer.play().catch(e => {
-                                    console.log('Auto-play prevented:', e);
-                                });
-                            });
+                        if (response.ok) {
+                            const data = await response.json();
                             
-                            // Error handling
-                            hls.on(Hls.Events.ERROR, function(event, data) {
-                                if (data.fatal) {
-                                    console.error('HLS error:', data);
-                                    switch(data.type) {
-                                        case Hls.ErrorTypes.NETWORK_ERROR:
-                                            showAlert(`Network error while loading video: ${videoId}`, 'error');
-                                            hls.startLoad();
-                                            break;
-                                        case Hls.ErrorTypes.MEDIA_ERROR:
-                                            showAlert(`Media error while playing video: ${videoId}`, 'error');
-                                            hls.recoverMediaError();
-                                            break;
-                                        default:
-                                            showAlert(`Error playing video: ${videoId}`, 'error');
-                                            break;
-                                    }
-                                }
-                            });
-                        } 
-                        // For browsers that natively support HLS (like Safari)
-                        else if (videoElementPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                            videoElementPlayer.src = playbackUrl;
-                            videoElementPlayer.addEventListener('loadedmetadata', function() {
-                                videoElementPlayer.play().catch(e => {
-                                    console.log('Auto-play prevented:', e);
-                                });
-                            });
-                        } else {
-                            // No HLS support
-                            videoElementPlayer.outerHTML = `<div class="video-placeholder">Your browser does not support HLS streaming. Try using Safari, Chrome, or Firefox.</div>`;
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Add a video to the UI
-        function addVideoToUI(video) {
-            const videoCard = document.createElement('div');
-            videoCard.id = `video-${video.id}`;
-            videoCard.className = 'video-card';
-            
-            let videoPlayer;
-            if (video.playbackUrl && video.status === 'ready') {
-                videoPlayer = `<video class="video-player" id="hlsPlayer-${video.id}" controls></video>`;
-            } else {
-                videoPlayer = `<div class="video-placeholder">Video processing...</div>`;
-            }
-            
-            videoCard.innerHTML = `
-                ${videoPlayer}
-                <div class="video-details">
-                    <div class="video-title">${video.title}</div>
-                    <div class="video-description">${video.description || 'No description'}</div>
-                    <div class="video-status status-${video.status}">${video.status}</div>
-                </div>
-            `;
-            
-            document.getElementById('videosContainer').prepend(videoCard);
-            
-            // Initialize HLS.js for ready videos
-            if (video.playbackUrl && video.status === 'ready') {
-                initializeHlsPlayer(video.id, video.playbackUrl);
-            }
-        }
-        
-        // Initialize HLS player for a specific video
-        function initializeHlsPlayer(videoId, playbackUrl) {
-            const videoElement = document.getElementById(`hlsPlayer-${videoId}`);
-            if (!videoElement) return;
-            
-            if (Hls.isSupported()) {
-                const hls = new Hls({
-                    debug: false,
-                    enableWorker: true,
-                    // Add URL rewriting for segment requests
-                    xhrSetup: function(xhr, url) {
-                        // If it's already using the delivery service, don't modify
-                        if (url.includes(DELIVERY_SERVICE_URL)) {
-                            return;
-                        }
-                        
-                        // If it's a S3 URL for a segment or playlist
-                        if (url.includes('s3.amazonaws.com')) {
-                            // Extract the path components from the URL
-                            const urlObj = new URL(url);
-                            const pathParts = urlObj.pathname.split('/');
-                            
-                            // Extract video ID (should be right after the bucket name)
-                            const bucketIndex = pathParts.findIndex(part => 
-                                part === 'processed-s3-bucket-49' || part.endsWith('.s3.amazonaws.com'));
-                            
-                            if (bucketIndex !== -1 && bucketIndex + 1 < pathParts.length) {
-                                const videoId = pathParts[bucketIndex + 1];
-                                
-                                // Check if this is a segment request
-                                if (pathParts.includes('segments') && pathParts.length > bucketIndex + 4) {
-                                    const resolutionIndex = pathParts.indexOf('segments') + 1;
-                                    const resolution = pathParts[resolutionIndex];
-                                    const segmentPath = pathParts.slice(resolutionIndex + 1).join('/');
-                                    
-                                    // Rewrite to delivery service URL
-                                    const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/segments/${resolution}/${segmentPath}`;
-                                    xhr.open('GET', newUrl);
-                                }
-                                // Check if this is a playlist request
-                                else if (url.endsWith('.m3u8')) {
-                                    const playlistPath = pathParts.slice(bucketIndex + 2).join('/');
-                                    // Rewrite to delivery service URL
-                                    const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/${playlistPath}`;
-                                    xhr.open('GET', newUrl);
-                                }
+                            if (data.status === 'ready') {
+                                // Update status
+                                uploadedVideos[videoIndex].status = 'ready';
+                                uploadedVideos[videoIndex].playbackUrl = data.playback_url;
+                                updateVideoList();
+                                clearInterval(pollInterval);
                             }
                         }
+                    } catch (error) {
+                        console.log(`Polling error for ${videoId}: ${error.message}`);
                     }
-                });
-                hls.loadSource(playbackUrl);
-                hls.attachMedia(videoElement);
+                }, 5000);
                 
-                // Error handling
-                hls.on(Hls.Events.ERROR, function(event, data) {
-                    if (data.fatal) {
-                        console.error('HLS error:', data);
-                        switch(data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                showAlert(`Network error while loading video: ${videoId}`, 'error');
-                                hls.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                showAlert(`Media error while playing video: ${videoId}`, 'error');
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                showAlert(`Error playing video: ${videoId}`, 'error');
-                                break;
-                        }
-                    }
-                });
-            } 
-            // For browsers that natively support HLS (like Safari)
-            else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-                videoElement.src = playbackUrl;
-            } else {
-                // No HLS support
-                videoElement.outerHTML = `<div class="video-placeholder">Your browser does not support HLS streaming. Try using Safari, Chrome, or Firefox.</div>`;
+            } catch (error) {
+                console.error(`Error setting up polling for ${videoId}: ${error}`);
             }
         }
-        
-        // Show an alert message
-        function showAlert(message, type) {
-            const alertContainer = document.getElementById('alertContainer');
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
+
+        // Update the video list UI
+        function updateVideoList() {
+            const container = document.getElementById('videoItems');
             
-            alertContainer.appendChild(alert);
-            
-            // Remove after 5 seconds
-            setTimeout(() => {
-                alert.remove();
-            }, 5000);
-        }
-        
-        // Show progress bar
-        function showProgress() {
-            document.getElementById('progressWrapper').style.display = 'block';
-            document.getElementById('uploadButton').disabled = true;
-        }
-        
-        // Hide progress bar
-        function hideProgress() {
-            document.getElementById('progressWrapper').style.display = 'none';
-            document.getElementById('uploadButton').disabled = false;
-        }
-        
-        // Update progress bar
-        function updateProgress(percentage) {
-            document.getElementById('progressFill').style.width = `${percentage}%`;
-            document.getElementById('progressText').textContent = `${percentage}%`;
-        }
-        
-        // Save videos to local storage
-        function saveVideosToLocalStorage() {
-            localStorage.setItem('uploadedVideos', JSON.stringify(uploadedVideos));
-        }
-        
-        // Load videos from local storage
-        function loadVideosFromLocalStorage() {
-            const savedVideos = localStorage.getItem('uploadedVideos');
-            if (savedVideos) {
-                uploadedVideos = JSON.parse(savedVideos);
-                
-                // Add to UI and update playback URLs to use delivery service
-                uploadedVideos.forEach(video => {
-                    // If video has a direct S3 URL, update it to use delivery service
-                    if (video.playbackUrl && video.playbackUrl.includes('s3.amazonaws.com')) {
-                        const videoId = video.id;
-                        video.playbackUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/master.m3u8`;
-                    } else if (video.status === 'ready' && !video.playbackUrl) {
-                        // If video is ready but no URL, create one
-                        video.playbackUrl = `${DELIVERY_SERVICE_URL}/videos/${video.id}/manifest/master.m3u8`;
-                    }
-                    
-                    addVideoToUI(video);
-                    
-                    // Continue polling for processing videos
-                    if (video.status === 'processing') {
-                        pollVideoStatus(video.id);
-                    }
-                });
+            if (uploadedVideos.length === 0) {
+                container.innerHTML = '<p>Your uploaded videos will appear here</p>';
+                return;
             }
-        }
-        
-        // Initialize all HLS players
-        function initializeAllHlsPlayers() {
+            
+            container.innerHTML = '';
             uploadedVideos.forEach(video => {
-                if (video.status === 'ready' && video.playbackUrl) {
-                    initializeHlsPlayer(video.id, video.playbackUrl);
+                const div = document.createElement('div');
+                div.className = 'video-item';
+                div.innerHTML = `
+                    <strong>${video.title}</strong> 
+                    <span>(${video.status})</span>
+                `;
+                
+                if (video.status === 'ready') {
+                    div.style.cursor = 'pointer';
+                    div.addEventListener('click', () => playVideo(video));
                 }
+                
+                container.appendChild(div);
             });
         }
-        
-        // Initialize on page load
-        window.addEventListener('DOMContentLoaded', () => {
-            loadVideosFromLocalStorage();
-            // Initialize any ready videos
-            setTimeout(initializeAllHlsPlayers, 500);
-        });
+
+        // Play a video
+        function playVideo(video) {
+            const videoPlayer = document.getElementById('videoPlayer');
+            const playbackUrl = `${DELIVERY_URL}/${video.id}/master.m3u8`;
+            
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(playbackUrl);
+                hls.attachMedia(videoPlayer);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    videoPlayer.play();
+                });
+            } 
+            else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                // For Safari
+                videoPlayer.src = playbackUrl;
+                videoPlayer.addEventListener('loadedmetadata', function() {
+                    videoPlayer.play();
+                });
+            }
+            else {
+                showStatus('HLS is not supported in your browser', 'error');
+            }
+        }
+
+        // Initial check for existing videos (if you want to implement)
+        async function checkExistingVideos() {
+            // This would require a list endpoint that we haven't implemented
+            // but you could add code here to fetch existing videos
+        }
     </script>
 </body>
 </html>

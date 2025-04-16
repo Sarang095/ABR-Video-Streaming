@@ -181,6 +181,20 @@ async def serve_video_file(video_id: str, file_path: str):
     Serve any video file directly from S3.
     This handles both manifest and segment files with a simple structure.
     """
+    # Handle the specific case of segments paths
+    if file_path.startswith("segments/"):
+        # Extract resolution from path like "segments/360p/playlist.m3u8"
+        parts = file_path.split("/")
+        if len(parts) >= 2:
+            resolution = parts[1]  # This gets the "360p" part
+            remaining_path = "/".join(parts[2:])  # This gets "playlist.m3u8" or any file after resolution
+            
+            # Remap path to actual S3 structure: "{video_id}/{resolution}/{file}"
+            s3_key = f"{video_id}/{resolution}/{remaining_path}"
+            logger.info(f"Remapped path: {file_path} → {s3_key}")
+            return await stream_from_s3(processed_bucket, s3_key)
+    
+    # For all other files (including master.m3u8), use the original path
     s3_key = f"{video_id}/{file_path}"
     return await stream_from_s3(processed_bucket, s3_key)
 
