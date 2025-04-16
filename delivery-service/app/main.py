@@ -2,7 +2,6 @@ import os
 import json
 import asyncio
 import boto3
-import pymongo
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
@@ -30,18 +29,15 @@ app.add_middleware(
 # Initialize clients
 s3_client = boto3.client('s3', region_name=os.getenv("AWS_REGION", "us-east-1"))
 sqs_client = boto3.client('sqs', region_name=os.getenv("AWS_REGION", "us-east-1"))
-mongo_client = pymongo.MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017"))
-db = mongo_client[os.getenv("MONGODB_DATABASE", "video_platform")]
-videos_collection = db["videos"]
 
 # Get configuration from environment
 processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
 cdn_domain = os.getenv("CDN_DOMAIN", None)  # Optional CDN domain
 use_presigned_urls = os.getenv("USE_PRESIGNED_URLS", "false").lower() == "true"
 presigned_url_expiry = int(os.getenv("PRESIGNED_URL_EXPIRY", "300"))  # 5 minutes default
-delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
+delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123456789012/video-delivery-queue")
 
-# Cache for video metadata to reduce MongoDB load
+# Cache for video metadata
 video_cache = {}
 cache_ttl = 300  # 5 minutes
 cache_last_cleanup = time.time()
@@ -86,9 +82,34 @@ async def clean_expired_cache():
     
     cache_last_cleanup = current_time
 
+async def check_s3_object_exists(bucket: str, key: str) -> bool:
+    """
+    Check if an S3 object exists.
+    
+    Args:
+        bucket: S3 bucket name
+        key: S3 object key
+        
+    Returns:
+        True if object exists, False otherwise
+    """
+    try:
+        await asyncio.to_thread(
+            s3_client.head_object,
+            Bucket=bucket,
+            Key=key
+        )
+        return True
+    except ClientError as e:
+        if e.response['Error']['Code'] == '404':
+            return False
+        else:
+            logger.error(f"Error checking S3 object: {str(e)}")
+            raise
+
 async def get_video_metadata(video_id: str) -> Dict[str, Any]:
     """
-    Get video metadata from cache or MongoDB.
+    Get video metadata from cache or generate it based on video ID.
     
     Args:
         video_id: The ID of the video
@@ -104,25 +125,37 @@ async def get_video_metadata(video_id: str) -> Dict[str, Any]:
         if time.time() - cache_data["timestamp"] < cache_ttl:
             return cache_data["data"]
     
-    # Get from MongoDB - make sure to use the string ID as stored in MongoDB
-    video = await asyncio.to_thread(
-        videos_collection.find_one,
-        {"_id": video_id}
-    )
+    # Generate metadata based on video ID
+    master_playlist_key = f"{video_id}/master.m3u8"
     
-    if not video:
+    # Check if video exists in S3
+    exists = await check_s3_object_exists(processed_bucket, master_playlist_key)
+    if not exists:
         raise HTTPException(status_code=404, detail="Video not found")
     
-    if video.get("status") != "ready":
-        raise HTTPException(status_code=400, detail=f"Video is not ready for playback. Current status: {video.get('status')}")
+    # Generate basic metadata
+    playback_urls = {
+        "hls": f"https://{processed_bucket}.s3.amazonaws.com/{video_id}/master.m3u8",
+        "dash": None  # Add DASH support if needed in the future
+    }
+    
+    # Try to get additional metadata if needed
+    video_metadata = {
+        "_id": video_id,
+        "title": f"Video {video_id}",
+        "status": "ready",  # If we found it in S3, it's ready
+        "playback_urls": playback_urls,
+        "created_at": None,  # We don't have this info
+        # Add other fields as needed, based on what your frontend expects
+    }
     
     # Cache the result
     video_cache[video_id] = {
-        "data": video,
+        "data": video_metadata,
         "timestamp": time.time()
     }
     
-    return video
+    return video_metadata
 
 async def get_presigned_url(bucket: str, key: str, expires_in: int = presigned_url_expiry) -> str:
     """
@@ -242,24 +275,32 @@ async def poll_sqs_queue():
                             logger.info(f"Received message for video {video_id} with status {status}")
                             
                             if status == "ready":
-                                # Pre-warm the cache for this video
-                                try:
-                                    # Clear from cache if it exists to force a refresh
-                                    if video_id in video_cache:
-                                        del video_cache[video_id]
-                                    
-                                    # Try to get video metadata to cache it
-                                    await get_video_metadata(video_id)
-                                    logger.info(f"Video {video_id} is now ready for delivery")
-                                except Exception as e:
-                                    logger.error(f"Error pre-warming cache for video {video_id}: {str(e)}")
-                            
+                                # Remove from cache if it already exists
+                                if video_id in video_cache:
+                                    del video_cache[video_id]
+                                
+                                # Create a placeholder in the cache
+                                master_playlist_url = f"https://{processed_bucket}.s3.amazonaws.com/{video_id}/master.m3u8"
+                                video_cache[video_id] = {
+                                    "data": {
+                                        "_id": video_id,
+                                        "title": f"Video {video_id}",
+                                        "status": "ready",
+                                        "playback_urls": {
+                                            "hls": master_playlist_url,
+                                            "dash": None
+                                        },
+                                        "created_at": body.get("timestamp")
+                                    },
+                                    "timestamp": time.time()
+                                }
+                                logger.info(f"Added video {video_id} to cache with playback URL: {master_playlist_url}")
                             elif status == "failed":
-                                error = body.get("error", "Unknown error")
-                                logger.warning(f"Video {video_id} processing failed: {error}")
                                 # Remove from cache if it exists
                                 if video_id in video_cache:
                                     del video_cache[video_id]
+                                error = body.get("error", "Unknown error")
+                                logger.warning(f"Video {video_id} processing failed: {error}")
                         
                         # Delete the message
                         await asyncio.to_thread(
@@ -298,7 +339,7 @@ async def get_video_info(video_id: str):
     """
     video = await get_video_metadata(video_id)
     
-    # Filter sensitive information
+    # Return safe video info
     safe_video = {
         "id": video_id,
         "title": video.get("title", "Untitled"),
@@ -331,7 +372,8 @@ async def get_playback_url(video_id: str, redirect: bool = False):
     hls_url = playback_urls.get("hls")
     
     if not hls_url:
-        raise HTTPException(status_code=400, detail="No HLS playback URL available")
+        # If no HLS URL is stored, generate it
+        hls_url = f"https://{processed_bucket}.s3.amazonaws.com/{video_id}/master.m3u8"
     
     # If using a CDN, replace the S3 URL with the CDN URL
     if cdn_domain:
@@ -358,7 +400,8 @@ async def serve_manifest(video_id: str, file_path: str, request: Request):
     Returns:
         Manifest content or redirect
     """
-    await get_video_metadata(video_id)  # Validate video exists and is ready
+    # Check if video exists in cache or S3
+    await get_video_metadata(video_id)
     
     s3_key = f"{video_id}/{file_path}"
     
@@ -384,7 +427,8 @@ async def serve_segment(video_id: str, resolution: str, segment_file: str, reque
     Returns:
         Segment content or redirect
     """
-    await get_video_metadata(video_id)  # Validate video exists and is ready
+    # Check if video exists in cache or S3
+    await get_video_metadata(video_id)
     
     s3_key = f"{video_id}/segments/{resolution}/{segment_file}"
     
