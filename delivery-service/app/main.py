@@ -37,6 +37,7 @@ cdn_domain = os.getenv("CDN_DOMAIN", None)  # Optional CDN domain
 use_presigned_urls = os.getenv("USE_PRESIGNED_URLS", "false").lower() == "true"
 presigned_url_expiry = int(os.getenv("PRESIGNED_URL_EXPIRY", "300"))  # 5 minutes default
 delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
+base_url = os.getenv("BASE_URL", "http://34.207.147.197:8001")  # Add base URL for the service
 
 # Cache for video metadata
 video_cache = {}
@@ -138,9 +139,9 @@ async def get_video_metadata(video_id: str) -> Dict[str, Any]:
     if not exists:
         raise HTTPException(status_code=404, detail="Video not found")
     
-    # Generate basic metadata
+    # Generate playback URLs using our service endpoints instead of direct S3 URLs
     playback_urls = {
-        "hls": f"https://{processed_bucket}.s3.amazonaws.com/{video_id}/master.m3u8",
+        "hls": f"{base_url}/videos/{video_id}/manifest/master.m3u8",
         "dash": None  # Add DASH support if needed in the future
     }
     
@@ -186,7 +187,96 @@ async def get_presigned_url(bucket: str, key: str, expires_in: int = presigned_u
         logger.error(f"Error generating presigned URL: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to generate URL")
 
-async def stream_s3_object(bucket: str, key: str, request_headers: Dict[str, str]) -> StreamingResponse:
+async def process_m3u8_content(content: bytes, video_id: str, file_path: str) -> bytes:
+    """
+    Process M3U8 content to rewrite URLs to use our delivery service.
+    
+    Args:
+        content: Original M3U8 content
+        video_id: The ID of the video
+        file_path: The original M3U8 file path
+        
+    Returns:
+        Processed M3U8 content with rewritten URLs
+    """
+    # Decode the content
+    text_content = content.decode('utf-8')
+    lines = text_content.splitlines()
+    
+    # Get the base directory of the current playlist
+    base_dir = os.path.dirname(file_path)
+    if base_dir and not base_dir.endswith('/'):
+        base_dir += '/'
+    
+    processed_lines = []
+    
+    for line in lines:
+        if line.startswith('#'):
+            # Handle URI references in tags (like #EXT-X-MEDIA:URI=)
+            if 'URI="' in line:
+                # Extract URI value
+                start_idx = line.find('URI="') + 5
+                end_idx = line.find('"', start_idx)
+                uri = line[start_idx:end_idx]
+                
+                # If it's a relative path, rewrite it
+                if not uri.startswith('http'):
+                    # Calculate the file path
+                    if uri.startswith('/'):
+                        full_path = uri[1:]  # Strip leading slash
+                    else:
+                        full_path = f"{base_dir}{uri}"
+                    
+                    # Rewrite the URI
+                    new_uri = f"{base_url}/videos/{video_id}/manifest/{full_path}"
+                    line = line[:start_idx] + new_uri + line[end_idx:]
+                    
+            processed_lines.append(line)
+        else:
+            # Handle segment paths
+            if line and not line.startswith('http') and not line.startswith('#'):
+                # This is a segment or playlist path
+                if line.endswith('.m3u8'):
+                    # It's a playlist
+                    if line.startswith('/'):
+                        full_path = line[1:]  # Strip leading slash
+                    else:
+                        full_path = f"{base_dir}{line}"
+                    
+                    # Rewrite the URL
+                    new_url = f"{base_url}/videos/{video_id}/manifest/{full_path}"
+                    processed_lines.append(new_url)
+                else:
+                    # It's a segment
+                    if line.startswith('/'):
+                        # Absolute path within the video directory
+                        full_path = line[1:]  # Strip leading slash
+                    else:
+                        # Relative path to the current playlist
+                        full_path = f"{base_dir}{line}"
+                    
+                    # Extract segment path
+                    if 'segments/' in full_path:
+                        segments_idx = full_path.find('segments/')
+                        segment_path = full_path[segments_idx:]
+                        resolution = segment_path.split('/')[1]
+                        segment_file = '/'.join(segment_path.split('/')[2:])
+                        
+                        # Rewrite the URL
+                        new_url = f"{base_url}/videos/{video_id}/segments/{resolution}/{segment_file}"
+                    else:
+                        # Just use manifest path if it's not in the segments directory
+                        new_url = f"{base_url}/videos/{video_id}/manifest/{full_path}"
+                        
+                    processed_lines.append(new_url)
+            else:
+                # Pass through all other lines (like blank lines)
+                processed_lines.append(line)
+    
+    # Join the processed lines and encode
+    return '\n'.join(processed_lines).encode('utf-8')
+
+async def stream_s3_object(bucket: str, key: str, request_headers: Dict[str, str], is_m3u8: bool = False, video_id: str = None, file_path: str = None) -> StreamingResponse:
     """
     Stream content directly from S3.
     
@@ -194,6 +284,9 @@ async def stream_s3_object(bucket: str, key: str, request_headers: Dict[str, str
         bucket: S3 bucket name
         key: S3 object key
         request_headers: Headers from the original request
+        is_m3u8: Whether the content is an M3U8 playlist
+        video_id: Video ID (for M3U8 processing)
+        file_path: Original file path (for M3U8 processing)
         
     Returns:
         StreamingResponse with the S3 object content
@@ -216,38 +309,75 @@ async def stream_s3_object(bucket: str, key: str, request_headers: Dict[str, str
             Key=key
         )
         
-        # Create an async generator to stream the content
-        async def stream_content():
+        # If it's an M3U8 file and we need to process it
+        if is_m3u8 and video_id and file_path:
+            # Read all content at once since M3U8 files are small
             body = s3_response['Body']
-            while True:
-                chunk = await asyncio.to_thread(body.read, 8192)  # 8KB chunks
-                if not chunk:
-                    break
-                yield chunk
-            
-            # Close the S3 body when done
+            content = await asyncio.to_thread(body.read)
+            processed_content = await process_m3u8_content(content, video_id, file_path)
             await asyncio.to_thread(body.close)
-        
-        # Prepare response headers
-        headers = {
-            'Content-Type': content_type,
-            'Content-Length': str(content_length),
-            'Accept-Ranges': 'bytes',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': '*',
-            'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, ETag'
-        }
-        
-        # Add ETag for caching if available
-        if 'ETag' in head_object:
-            headers['ETag'] = head_object['ETag']
-        
-        return StreamingResponse(
-            stream_content(),
-            headers=headers,
-            background=BackgroundTask(lambda: None)  # Dummy task
-        )
+            
+            # Create an async generator to stream the processed content
+            async def stream_processed_content():
+                yield processed_content
+            
+            # Content length is now different
+            content_length = len(processed_content)
+            
+            # Prepare response headers
+            headers = {
+                'Content-Type': content_type,
+                'Content-Length': str(content_length),
+                'Accept-Ranges': 'bytes',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': '*',
+                'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, ETag'
+            }
+            
+            # Add ETag for caching if available
+            if 'ETag' in head_object:
+                headers['ETag'] = head_object['ETag']
+            
+            return StreamingResponse(
+                stream_processed_content(),
+                headers=headers,
+                background=BackgroundTask(lambda: None)  # Dummy task
+            )
+        else:
+            # For non-M3U8 content, stream directly
+            # Create an async generator to stream the content
+            async def stream_content():
+                body = s3_response['Body']
+                while True:
+                    chunk = await asyncio.to_thread(body.read, 8192)  # 8KB chunks
+                    if not chunk:
+                        break
+                    yield chunk
+                
+                # Close the S3 body when done
+                await asyncio.to_thread(body.close)
+            
+            # Prepare response headers
+            headers = {
+                'Content-Type': content_type,
+                'Content-Length': str(content_length),
+                'Accept-Ranges': 'bytes',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': '*',
+                'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, ETag'
+            }
+            
+            # Add ETag for caching if available
+            if 'ETag' in head_object:
+                headers['ETag'] = head_object['ETag']
+            
+            return StreamingResponse(
+                stream_content(),
+                headers=headers,
+                background=BackgroundTask(lambda: None)  # Dummy task
+            )
         
     except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchKey':
@@ -289,7 +419,7 @@ async def poll_sqs_queue():
                                     del video_cache[video_id]
                                 
                                 # Create a placeholder in the cache
-                                master_playlist_url = f"https://{processed_bucket}.s3.amazonaws.com/{video_id}/master.m3u8"
+                                master_playlist_url = f"{base_url}/videos/{video_id}/manifest/master.m3u8"
                                 video_cache[video_id] = {
                                     "data": {
                                         "_id": video_id,
@@ -403,15 +533,8 @@ async def get_playback_url(video_id: str, redirect: bool = False):
     hls_url = playback_urls.get("hls")
     
     if not hls_url:
-        # If no HLS URL is stored, generate it
-        hls_url = f"https://{processed_bucket}.s3.amazonaws.com/{video_id}/master.m3u8"
-    
-    # If using a CDN, replace the S3 URL with the CDN URL
-    if cdn_domain:
-        # Extract the path part from the S3 URL
-        parsed_url = urllib.parse.urlparse(hls_url)
-        path = parsed_url.path.lstrip('/')
-        hls_url = f"https://{cdn_domain}/{path}"
+        # If no HLS URL is stored, generate it using our service endpoint
+        hls_url = f"{base_url}/videos/{video_id}/manifest/master.m3u8"
     
     if redirect:
         response = RedirectResponse(url=hls_url)
@@ -441,25 +564,23 @@ async def serve_manifest(video_id: str, file_path: str, request: Request):
         request: FastAPI request object
         
     Returns:
-        Manifest content or redirect
+        Manifest content
     """
     # Check if video exists in cache or S3
     await get_video_metadata(video_id)
     
     s3_key = f"{video_id}/{file_path}"
     
-    if use_presigned_urls:
-        # Generate a presigned URL and redirect
-        url = await get_presigned_url(processed_bucket, s3_key)
-        response = RedirectResponse(url=url)
-        # Add CORS headers to redirect
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        return response
-    else:
-        # Stream the content directly
-        return await stream_s3_object(processed_bucket, s3_key, dict(request.headers))
+    # Stream the content and process M3U8 files to rewrite URLs
+    is_m3u8 = file_path.endswith('.m3u8')
+    return await stream_s3_object(
+        processed_bucket, 
+        s3_key, 
+        dict(request.headers),
+        is_m3u8=is_m3u8,
+        video_id=video_id if is_m3u8 else None,
+        file_path=file_path if is_m3u8 else None
+    )
 
 @app.get("/videos/{video_id}/segments/{resolution}/{segment_file:path}")
 async def serve_segment(video_id: str, resolution: str, segment_file: str, request: Request):
@@ -473,25 +594,15 @@ async def serve_segment(video_id: str, resolution: str, segment_file: str, reque
         request: FastAPI request object
         
     Returns:
-        Segment content or redirect
+        Segment content
     """
     # Check if video exists in cache or S3
     await get_video_metadata(video_id)
     
     s3_key = f"{video_id}/segments/{resolution}/{segment_file}"
     
-    if use_presigned_urls:
-        # Generate a presigned URL and redirect
-        url = await get_presigned_url(processed_bucket, s3_key)
-        response = RedirectResponse(url=url)
-        # Add CORS headers to redirect
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        return response
-    else:
-        # Stream the content directly
-        return await stream_s3_object(processed_bucket, s3_key, dict(request.headers))
+    # Stream the content directly (no need to process .ts files)
+    return await stream_s3_object(processed_bucket, s3_key, dict(request.headers))
 
 @app.get("/healthcheck")
 async def healthcheck():

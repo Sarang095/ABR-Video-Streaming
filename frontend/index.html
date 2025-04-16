@@ -417,7 +417,9 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    updateVideoStatus(videoId, data.status, data.playback_urls?.hls);
+                    // Use the delivery service to proxy content instead of direct S3 URLs
+                    const playbackUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/master.m3u8`;
+                    updateVideoStatus(videoId, data.status, playbackUrl);
                     
                     if (data.status === 'processing') {
                         // Continue polling if still processing
@@ -468,7 +470,47 @@
                         if (Hls.isSupported()) {
                             const hls = new Hls({
                                 debug: false,
-                                enableWorker: true
+                                enableWorker: true,
+                                // Add URL rewriting for segment requests
+                                xhrSetup: function(xhr, url) {
+                                    // If it's already using the delivery service, don't modify
+                                    if (url.includes(DELIVERY_SERVICE_URL)) {
+                                        return;
+                                    }
+                                    
+                                    // If it's a S3 URL for a segment or playlist
+                                    if (url.includes('s3.amazonaws.com')) {
+                                        // Extract the path components from the URL
+                                        const urlObj = new URL(url);
+                                        const pathParts = urlObj.pathname.split('/');
+                                        
+                                        // Extract video ID (should be right after the bucket name)
+                                        const bucketIndex = pathParts.findIndex(part => 
+                                            part === 'processed-s3-bucket-49' || part.endsWith('.s3.amazonaws.com'));
+                                        
+                                        if (bucketIndex !== -1 && bucketIndex + 1 < pathParts.length) {
+                                            const videoId = pathParts[bucketIndex + 1];
+                                            
+                                            // Check if this is a segment request
+                                            if (pathParts.includes('segments') && pathParts.length > bucketIndex + 4) {
+                                                const resolutionIndex = pathParts.indexOf('segments') + 1;
+                                                const resolution = pathParts[resolutionIndex];
+                                                const segmentPath = pathParts.slice(resolutionIndex + 1).join('/');
+                                                
+                                                // Rewrite to delivery service URL
+                                                const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/segments/${resolution}/${segmentPath}`;
+                                                xhr.open('GET', newUrl);
+                                            }
+                                            // Check if this is a playlist request
+                                            else if (url.endsWith('.m3u8')) {
+                                                const playlistPath = pathParts.slice(bucketIndex + 2).join('/');
+                                                // Rewrite to delivery service URL
+                                                const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/${playlistPath}`;
+                                                xhr.open('GET', newUrl);
+                                            }
+                                        }
+                                    }
+                                }
                             });
                             hls.loadSource(playbackUrl);
                             hls.attachMedia(videoElementPlayer);
@@ -553,7 +595,47 @@
             if (Hls.isSupported()) {
                 const hls = new Hls({
                     debug: false,
-                    enableWorker: true
+                    enableWorker: true,
+                    // Add URL rewriting for segment requests
+                    xhrSetup: function(xhr, url) {
+                        // If it's already using the delivery service, don't modify
+                        if (url.includes(DELIVERY_SERVICE_URL)) {
+                            return;
+                        }
+                        
+                        // If it's a S3 URL for a segment or playlist
+                        if (url.includes('s3.amazonaws.com')) {
+                            // Extract the path components from the URL
+                            const urlObj = new URL(url);
+                            const pathParts = urlObj.pathname.split('/');
+                            
+                            // Extract video ID (should be right after the bucket name)
+                            const bucketIndex = pathParts.findIndex(part => 
+                                part === 'processed-s3-bucket-49' || part.endsWith('.s3.amazonaws.com'));
+                            
+                            if (bucketIndex !== -1 && bucketIndex + 1 < pathParts.length) {
+                                const videoId = pathParts[bucketIndex + 1];
+                                
+                                // Check if this is a segment request
+                                if (pathParts.includes('segments') && pathParts.length > bucketIndex + 4) {
+                                    const resolutionIndex = pathParts.indexOf('segments') + 1;
+                                    const resolution = pathParts[resolutionIndex];
+                                    const segmentPath = pathParts.slice(resolutionIndex + 1).join('/');
+                                    
+                                    // Rewrite to delivery service URL
+                                    const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/segments/${resolution}/${segmentPath}`;
+                                    xhr.open('GET', newUrl);
+                                }
+                                // Check if this is a playlist request
+                                else if (url.endsWith('.m3u8')) {
+                                    const playlistPath = pathParts.slice(bucketIndex + 2).join('/');
+                                    // Rewrite to delivery service URL
+                                    const newUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/${playlistPath}`;
+                                    xhr.open('GET', newUrl);
+                                }
+                            }
+                        }
+                    }
                 });
                 hls.loadSource(playbackUrl);
                 hls.attachMedia(videoElement);
@@ -631,8 +713,17 @@
             if (savedVideos) {
                 uploadedVideos = JSON.parse(savedVideos);
                 
-                // Add to UI
+                // Add to UI and update playback URLs to use delivery service
                 uploadedVideos.forEach(video => {
+                    // If video has a direct S3 URL, update it to use delivery service
+                    if (video.playbackUrl && video.playbackUrl.includes('s3.amazonaws.com')) {
+                        const videoId = video.id;
+                        video.playbackUrl = `${DELIVERY_SERVICE_URL}/videos/${videoId}/manifest/master.m3u8`;
+                    } else if (video.status === 'ready' && !video.playbackUrl) {
+                        // If video is ready but no URL, create one
+                        video.playbackUrl = `${DELIVERY_SERVICE_URL}/videos/${video.id}/manifest/master.m3u8`;
+                    }
+                    
                     addVideoToUI(video);
                     
                     // Continue polling for processing videos
