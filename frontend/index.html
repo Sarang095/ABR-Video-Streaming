@@ -3,132 +3,505 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Video Platform</title>
+    <title>StreamVerse</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.5/hls.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #e50914;
+            --secondary-color: #141414;
+            --text-color: #fff;
+            --hover-color: #f40612;
+            --card-bg: #181818;
+            --card-hover: #2f2f2f;
+            --header-height: 68px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
             line-height: 1.6;
         }
-        h1, h2 {
-            color: #333;
+        
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
         }
-        .card {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
+        
+        header {
+            background-color: rgba(0, 0, 0, 0.9);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .logo {
+            font-size: 26px;
+            font-weight: bold;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .nav-links {
+            margin-left: 40px;
+            display: flex;
+        }
+        
+        .nav-links a {
+            color: var(--text-color);
+            margin-right: 20px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .nav-links a:hover {
+            color: #ccc;
+        }
+        
+        main {
+            margin-top: calc(var(--header-height) + 30px);
+            padding-bottom: 50px;
+        }
+        
+        section {
+            margin-bottom: 40px;
+        }
+        
+        h1, h2, h3 {
+            font-weight: 500;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        
+        h1 {
+            font-size: 32px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            padding-left: 20px;
+        }
+        
+        .upload-panel {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+            margin-left: 20px;
+        }
+        
         form {
             display: flex;
             flex-direction: column;
         }
+        
         label {
-            margin-top: 10px;
-            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 14px;
         }
+        
         input, textarea {
-            padding: 8px;
-            margin-top: 5px;
-            border: 1px solid #ddd;
+            padding: 12px;
+            background-color: #333;
+            border: 1px solid #444;
             border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
         }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        
         button {
-            background-color: #4CAF50;
+            background-color: var(--primary-color);
             color: white;
             border: none;
-            padding: 10px 15px;
-            margin-top: 15px;
+            padding: 12px 20px;
+            margin-top: 20px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.2s;
         }
+        
         button:hover {
-            background-color: #45a049;
+            background-color: var(--hover-color);
         }
+        
         #status {
             margin-top: 15px;
-            padding: 10px;
+            padding: 12px;
             border-radius: 4px;
+            font-size: 14px;
         }
+        
         .success {
-            background-color: #d4edda;
-            color: #155724;
+            background-color: rgba(39, 174, 96, 0.2);
+            color: #2ecc71;
         }
+        
         .error {
-            background-color: #f8d7da;
-            color: #721c24;
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
         }
+        
+        /* Video Player Styles */
+        .player-section {
+            display: none;
+            margin: 20px;
+        }
+        
+        .player-container {
+            position: relative;
+            width: 100%;
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+        
         video {
             width: 100%;
-            margin-top: 15px;
-            background-color: #000;
+            display: block;
         }
-        #videoList {
-            margin-top: 30px;
+        
+        .player-info {
+            padding: 20px;
+            background-color: var(--card-bg);
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
         }
-        .video-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
+        
+        .player-title {
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+        
+        .player-description {
+            color: #aaa;
+            font-size: 14px;
+        }
+        
+        /* Video Grid Styles */
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 20px;
+            padding: 0 20px;
+        }
+        
+        .video-card {
+            background-color: var(--card-bg);
+            border-radius: 6px;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
             cursor: pointer;
         }
-        .video-item:hover {
-            background-color: #f5f5f5;
+        
+        .video-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+            background-color: var(--card-hover);
         }
+        
+        .video-thumbnail {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: #333;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .video-thumbnail .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-ready {
+            background-color: #2ecc71;
+            color: #fff;
+        }
+        
+        .status-processing {
+            background-color: #f39c12;
+            color: #fff;
+        }
+        
+        .video-thumbnail .play-icon {
+            font-size: 40px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .video-card:hover .play-icon {
+            opacity: 1;
+        }
+        
+        .video-info {
+            padding: 15px;
+        }
+        
+        .video-title {
+            font-weight: 500;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .video-meta {
+            font-size: 12px;
+            color: #aaa;
+        }
+        
         #loadingIndicator {
             display: none;
-            color: #555;
-            margin-top: 10px;
+            color: #aaa;
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+        
+        #loadingIndicator i {
+            margin-right: 8px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Placeholder image for thumbnails */
+        .placeholder-thumbnail {
+            background: linear-gradient(135deg, #333 25%, #444 25%, #444 50%, #333 50%, #333 75%, #444 75%);
+            background-size: 20px 20px;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #aaa;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.6;
+        }
+        
+        /* Adaptive bitrate info panel */
+        .abr-info {
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+        }
+        
+        .abr-info.visible {
+            display: block;
+        }
+        
+        /* Modal dialog for upload form */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 200;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            overflow: auto;
+        }
+        
+        .modal-content {
+            background-color: var(--secondary-color);
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+        
+        .close-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #aaa;
+        }
+        
+        .close-button:hover {
+            color: var(--primary-color);
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #333;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            color: #aaa;
+        }
+        
+        .tab.active {
+            border-bottom-color: var(--primary-color);
+            color: var(--text-color);
+        }
+        
+        .add-video-button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 90;
+        }
+        
+        .add-video-button:hover {
+            background-color: var(--hover-color);
         }
     </style>
 </head>
 <body>
-    <h1>Simple Video Platform</h1>
+    <header>
+        <a href="#" class="logo">StreamVerse</a>
+        <nav class="nav-links">
+            <a href="#" class="active">Home</a>
+            <a href="#">My Videos</a>
+            <a href="#">Profile</a>
+        </nav>
+    </header>
 
-    <div class="card">
-        <h2>Upload Video</h2>
-        <form id="uploadForm">
-            <label for="videoFile">Select Video:</label>
-            <input type="file" id="videoFile" name="file" accept="video/*" required>
-            
-            <label for="title">Title:</label>
-            <input type="text" id="title" name="title" placeholder="Enter video title" required>
-            
-            <label for="description">Description:</label>
-            <textarea id="description" name="description" rows="3" placeholder="Enter video description"></textarea>
-            
-            <button type="submit">Upload Video</button>
-        </form>
-        <div id="loadingIndicator">Uploading... please wait</div>
-        <div id="status"></div>
-    </div>
+    <main>
+        <section class="player-section" id="playerSection">
+            <div class="player-container">
+                <video id="videoPlayer" controls></video>
+                <div class="abr-info" id="abrInfo">Current quality: <span id="currentQuality">---</span></div>
+            </div>
+            <div class="player-info">
+                <h3 class="player-title" id="playerTitle">Video Title</h3>
+                <p class="player-description" id="playerDescription">Video description will appear here.</p>
+            </div>
+        </section>
 
-    <div class="card">
-        <h2>Video Player</h2>
-        <div id="playerContainer">
-            <video id="videoPlayer" controls></video>
+        <section>
+            <h2>My Videos</h2>
+            <div class="video-grid" id="videoGrid">
+                <div class="empty-state">
+                    <i class="fas fa-film"></i>
+                    <p>Your uploaded videos will appear here</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <span class="close-button" id="closeModal">&times;</span>
+            <h2>Upload New Video</h2>
+            <form id="uploadForm">
+                <label for="videoFile">Select Video:</label>
+                <input type="file" id="videoFile" name="file" accept="video/*" required>
+                
+                <label for="title">Title:</label>
+                <input type="text" id="title" name="title" placeholder="Enter video title" required>
+                
+                <label for="description">Description:</label>
+                <textarea id="description" name="description" rows="3" placeholder="Enter video description"></textarea>
+                
+                <button type="submit">Upload Video</button>
+            </form>
+            <div id="loadingIndicator"><i class="fas fa-spinner"></i> Uploading... please wait</div>
+            <div id="status"></div>
         </div>
     </div>
 
-    <div class="card" id="videoList">
-        <h2>Your Videos</h2>
-        <div id="videoItems">
-            <p>Your uploaded videos will appear here</p>
-        </div>
-    </div>
+    <button class="add-video-button" id="addVideoButton"><i class="fas fa-plus"></i></button>
 
     <script>
         // Configuration - replace with your actual server IP
         const API_HOST = '13.218.123.213';
-        const UPLOAD_URL = `http://13.218.123.213:8000/api/videos/upload`;
-        const DELIVERY_URL = `http://13.218.123.213:8001/videos`;
+        const UPLOAD_URL = `http://${API_HOST}:8000/api/videos/upload`;
+        const DELIVERY_URL = `http://${API_HOST}:8001/videos`;
         
         // Store uploaded videos
         let uploadedVideos = [];
+        let currentHls = null;
+        
+        // Modal functionality
+        const modal = document.getElementById('uploadModal');
+        const addButton = document.getElementById('addVideoButton');
+        const closeModal = document.getElementById('closeModal');
+        
+        addButton.addEventListener('click', () => {
+            modal.style.display = 'block';
+        });
+        
+        closeModal.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
 
         // Set up form submission
         document.getElementById('uploadForm').addEventListener('submit', async function(e) {
@@ -151,10 +524,10 @@
             
             formData.append('file', fileInput.files[0]);
             formData.append('title', titleInput.value);
-            formData.append('description', descriptionInput.value);
+            formData.append('description', descriptionInput.value || 'No description provided');
             
             try {
-                loadingIndicator.style.display = 'block';
+                loadingIndicator.style.display = 'flex';
                 const response = await fetch(UPLOAD_URL, {
                     method: 'POST',
                     body: formData
@@ -167,22 +540,29 @@
                     throw new Error(result.detail || 'Upload failed');
                 }
                 
-                showStatus(`Video uploaded successfully! Video ID: ${result.video_id}`, 'success');
+                showStatus(`Video uploaded successfully!`, 'success');
                 
                 // Add to list and start polling for processing
                 const videoInfo = {
                     id: result.video_id,
                     title: titleInput.value,
-                    status: 'processing'
+                    description: descriptionInput.value || 'No description provided',
+                    status: 'processing',
+                    timestamp: new Date().toISOString()
                 };
                 uploadedVideos.push(videoInfo);
-                updateVideoList();
+                updateVideoGrid();
                 
                 // Start polling for this video
                 pollVideoStatus(result.video_id);
                 
                 // Reset form
                 document.getElementById('uploadForm').reset();
+                
+                // Close modal after successful upload
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 1500);
                 
             } catch (error) {
                 loadingIndicator.style.display = 'none';
@@ -216,7 +596,7 @@
                                 // Update status
                                 uploadedVideos[videoIndex].status = 'ready';
                                 uploadedVideos[videoIndex].playbackUrl = data.playback_url;
-                                updateVideoList();
+                                updateVideoGrid();
                                 clearInterval(pollInterval);
                             }
                         }
@@ -230,44 +610,123 @@
             }
         }
 
-        // Update the video list UI
-        function updateVideoList() {
-            const container = document.getElementById('videoItems');
+        // Update the video grid UI
+        function updateVideoGrid() {
+            const container = document.getElementById('videoGrid');
             
             if (uploadedVideos.length === 0) {
-                container.innerHTML = '<p>Your uploaded videos will appear here</p>';
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-film"></i>
+                        <p>Your uploaded videos will appear here</p>
+                    </div>
+                `;
                 return;
             }
             
             container.innerHTML = '';
             uploadedVideos.forEach(video => {
-                const div = document.createElement('div');
-                div.className = 'video-item';
-                div.innerHTML = `
-                    <strong>${video.title}</strong> 
-                    <span>(${video.status})</span>
+                const videoCard = document.createElement('div');
+                videoCard.className = 'video-card';
+                
+                // Create a formatted date string
+                const timestamp = video.timestamp ? new Date(video.timestamp) : new Date();
+                const dateString = timestamp.toLocaleDateString(undefined, { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                
+                videoCard.innerHTML = `
+                    <div class="video-thumbnail">
+                        <div class="placeholder-thumbnail"></div>
+                        <div class="status-badge ${video.status === 'ready' ? 'status-ready' : 'status-processing'}">
+                            ${video.status === 'ready' ? 'Ready' : 'Processing'}
+                        </div>
+                        ${video.status === 'ready' ? '<i class="fas fa-play-circle play-icon"></i>' : ''}
+                    </div>
+                    <div class="video-info">
+                        <h3 class="video-title">${video.title}</h3>
+                        <div class="video-meta">${dateString}</div>
+                    </div>
                 `;
                 
                 if (video.status === 'ready') {
-                    div.style.cursor = 'pointer';
-                    div.addEventListener('click', () => playVideo(video));
+                    videoCard.addEventListener('click', () => playVideo(video));
                 }
                 
-                container.appendChild(div);
+                container.appendChild(videoCard);
             });
         }
 
         // Play a video
         function playVideo(video) {
             const videoPlayer = document.getElementById('videoPlayer');
+            const playerSection = document.getElementById('playerSection');
+            const playerTitle = document.getElementById('playerTitle');
+            const playerDescription = document.getElementById('playerDescription');
+            const abrInfo = document.getElementById('abrInfo');
+            const currentQuality = document.getElementById('currentQuality');
+            
+            // Set title and description
+            playerTitle.textContent = video.title;
+            playerDescription.textContent = video.description;
+            
+            // Show player section
+            playerSection.style.display = 'block';
+            
+            // Scroll to player
+            playerSection.scrollIntoView({ behavior: 'smooth' });
+            
             const playbackUrl = `${DELIVERY_URL}/${video.id}/master.m3u8`;
             
+            // Clean up previous HLS instance if exists
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+            
             if (Hls.isSupported()) {
-                const hls = new Hls();
+                const hls = new Hls({
+                    debug: false,
+                    // ABR configuration
+                    autoStartLoad: true,
+                    startLevel: -1, // -1 means automatic selection
+                    abrEwmaDefaultEstimate: 500000, // Default bandwidth estimate
+                    abrEwmaFastLive: 3.0,
+                    abrEwmaSlowLive: 9.0
+                });
+                
+                currentHls = hls;
+                
                 hls.loadSource(playbackUrl);
                 hls.attachMedia(videoPlayer);
+                
+                // Listen for quality level changes to demonstrate ABR
+                hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
+                    const level = hls.levels[data.level];
+                    if (level) {
+                        const height = level.height || 'unknown';
+                        const bitrate = level.bitrate ? Math.round(level.bitrate / 1000) : 'unknown';
+                        currentQuality.textContent = `${height}p (${bitrate} kbps)`;
+                        
+                        // Show ABR info for a few seconds
+                        abrInfo.classList.add('visible');
+                        setTimeout(() => {
+                            abrInfo.classList.remove('visible');
+                        }, 5000);
+                    }
+                });
+                
                 hls.on(Hls.Events.MANIFEST_PARSED, function() {
                     videoPlayer.play();
+                    
+                    // Show available quality levels in console
+                    console.log('Available quality levels:', hls.levels.map(level => ({
+                        height: level.height,
+                        width: level.width,
+                        bitrate: Math.round(level.bitrate / 1000) + ' kbps'
+                    })));
                 });
             } 
             else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
@@ -276,17 +735,42 @@
                 videoPlayer.addEventListener('loadedmetadata', function() {
                     videoPlayer.play();
                 });
+                // Note: Native HLS in Safari doesn't provide easy quality change notifications
+                currentQuality.textContent = 'Auto (Native HLS)';
             }
             else {
                 showStatus('HLS is not supported in your browser', 'error');
             }
         }
 
-        // Initial check for existing videos (if you want to implement)
-        async function checkExistingVideos() {
-            // This would require a list endpoint that we haven't implemented
-            // but you could add code here to fetch existing videos
+        // Initialize
+        updateVideoGrid();
+        
+        // Add some demo data if you want to test the UI without uploading
+        function addDemoData() {
+            if (uploadedVideos.length === 0) {
+                uploadedVideos = [
+                    {
+                        id: 'demo-1',
+                        title: 'Example Video 1',
+                        description: 'This is a demo video to show the UI layout.',
+                        status: 'ready',
+                        timestamp: new Date().toISOString()
+                    },
+                    {
+                        id: 'demo-2',
+                        title: 'Example Video 2',
+                        description: 'Another demo video that is still processing.',
+                        status: 'processing',
+                        timestamp: new Date().toISOString()
+                    }
+                ];
+                updateVideoGrid();
+            }
         }
+        
+        // Uncomment to add demo data
+        // addDemoData();
     </script>
 </body>
 </html>
