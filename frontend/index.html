@@ -3,18 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StreamVerse</title>
+    <title>Simple ABR Player</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.5/hls.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #e50914;
-            --secondary-color: #141414;
-            --text-color: #fff;
-            --hover-color: #f40612;
-            --card-bg: #181818;
-            --card-hover: #2f2f2f;
-            --header-height: 68px;
+            --primary: #e50914;
+            --bg-dark: #141414;
+            --text: #fff;
         }
         
         * {
@@ -25,161 +21,34 @@
         
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: var(--secondary-color);
-            color: var(--text-color);
-            line-height: 1.6;
+            background-color: var(--bg-dark);
+            color: var(--text);
         }
         
         .container {
-            width: 100%;
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 20px;
         }
         
         header {
-            background-color: rgba(0, 0, 0, 0.9);
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: var(--header-height);
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            padding: 0 40px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            padding: 15px 0;
         }
         
         .logo {
-            font-size: 26px;
-            font-weight: bold;
-            color: var(--primary-color);
-            text-decoration: none;
-        }
-        
-        .nav-links {
-            margin-left: 40px;
-            display: flex;
-        }
-        
-        .nav-links a {
-            color: var(--text-color);
-            margin-right: 20px;
-            text-decoration: none;
-            font-size: 14px;
-        }
-        
-        .nav-links a:hover {
-            color: #ccc;
-        }
-        
-        main {
-            margin-top: calc(var(--header-height) + 30px);
-            padding-bottom: 50px;
-        }
-        
-        section {
-            margin-bottom: 40px;
-        }
-        
-        h1, h2, h3 {
-            font-weight: 500;
-            margin-bottom: 20px;
-        }
-        
-        h1 {
-            font-size: 32px;
-        }
-        
-        h2 {
+            color: var(--primary);
             font-size: 24px;
-            padding-left: 20px;
-        }
-        
-        .upload-panel {
-            background-color: var(--card-bg);
-            border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            max-width: 600px;
-            margin-left: 20px;
-        }
-        
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        label {
-            margin-top: 15px;
-            margin-bottom: 5px;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        input, textarea {
-            padding: 12px;
-            background-color: #333;
-            border: 1px solid #444;
-            border-radius: 4px;
-            color: #fff;
-            font-size: 14px;
-        }
-        
-        input:focus, textarea:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-        
-        button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            margin-top: 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 500;
-            transition: background-color 0.2s;
-        }
-        
-        button:hover {
-            background-color: var(--hover-color);
-        }
-        
-        #status {
-            margin-top: 15px;
-            padding: 12px;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .success {
-            background-color: rgba(39, 174, 96, 0.2);
-            color: #2ecc71;
-        }
-        
-        .error {
-            background-color: rgba(231, 76, 60, 0.2);
-            color: #e74c3c;
-        }
-        
-        /* Video Player Styles */
-        .player-section {
-            display: none;
-            margin: 20px;
+            font-weight: bold;
         }
         
         .player-container {
             position: relative;
             width: 100%;
-            background-color: #000;
+            background: #000;
+            margin: 20px 0;
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
         }
         
         video {
@@ -187,590 +56,603 @@
             display: block;
         }
         
-        .player-info {
-            padding: 20px;
-            background-color: var(--card-bg);
-            border-bottom-left-radius: 8px;
-            border-bottom-right-radius: 8px;
-        }
-        
-        .player-title {
-            font-size: 22px;
-            margin-bottom: 10px;
-        }
-        
-        .player-description {
-            color: #aaa;
-            font-size: 14px;
-        }
-        
-        /* Video Grid Styles */
-        .video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 20px;
-            padding: 0 20px;
-        }
-        
-        .video-card {
-            background-color: var(--card-bg);
-            border-radius: 6px;
-            overflow: hidden;
-            transition: transform 0.3s, box-shadow 0.3s;
-            cursor: pointer;
-        }
-        
-        .video-card:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
-            background-color: var(--card-hover);
-        }
-        
-        .video-thumbnail {
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            background-color: #333;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-        
-        .video-thumbnail .status-badge {
+        .quality-indicator {
             position: absolute;
-            top: 10px;
             right: 10px;
-            padding: 4px 8px;
+            top: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
             border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        
-        .status-ready {
-            background-color: #2ecc71;
-            color: #fff;
-        }
-        
-        .status-processing {
-            background-color: #f39c12;
-            color: #fff;
-        }
-        
-        .video-thumbnail .play-icon {
-            font-size: 40px;
+            font-size: 14px;
             opacity: 0;
-            transition: opacity 0.2s;
+            transition: opacity 0.3s;
+            z-index: 10;
         }
         
-        .video-card:hover .play-icon {
+        .quality-indicator.visible {
             opacity: 1;
         }
         
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        button:hover {
+            background: #444;
+        }
+        
+        button.active {
+            background: var(--primary);
+        }
+        
+        .upload-container {
+            background: #222;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #333;
+            border: none;
+            border-radius: 4px;
+            color: white;
+        }
+        
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .video-card {
+            background: #222;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .video-card:hover {
+            transform: scale(1.03);
+        }
+        
+        .thumbnail {
+            height: 130px;
+            background: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .thumbnail i {
+            font-size: 30px;
+            opacity: 0.7;
+        }
+        
         .video-info {
-            padding: 15px;
+            padding: 10px;
         }
         
         .video-title {
+            font-size: 14px;
             font-weight: 500;
-            margin-bottom: 5px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
-        .video-meta {
-            font-size: 12px;
-            color: #aaa;
-        }
-        
-        #loadingIndicator {
-            display: none;
-            color: #aaa;
-            margin-top: 15px;
-            display: flex;
-            align-items: center;
-            font-size: 14px;
-        }
-        
-        #loadingIndicator i {
-            margin-right: 8px;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Placeholder image for thumbnails */
-        .placeholder-thumbnail {
-            background: linear-gradient(135deg, #333 25%, #444 25%, #444 50%, #333 50%, #333 75%, #444 75%);
-            background-size: 20px 20px;
-            width: 100%;
-            height: 100%;
-        }
-        
-        /* Empty state */
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #aaa;
-        }
-        
-        .empty-state i {
-            font-size: 48px;
-            margin-bottom: 15px;
-            opacity: 0.6;
-        }
-        
-        /* Adaptive bitrate info panel */
-        .abr-info {
+        .status-badge {
             position: absolute;
-            bottom: 80px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 8px 12px;
-            border-radius: 4px;
+            top: 5px;
+            right: 5px;
             font-size: 12px;
-            display: none;
-        }
-        
-        .abr-info.visible {
-            display: block;
-        }
-        
-        /* Modal dialog for upload form */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 200;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            overflow: auto;
-        }
-        
-        .modal-content {
-            background-color: var(--secondary-color);
-            margin: 10% auto;
-            padding: 30px;
-            border-radius: 8px;
-            max-width: 600px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            position: relative;
-        }
-        
-        .close-button {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            font-size: 24px;
-            cursor: pointer;
-            color: #aaa;
-        }
-        
-        .close-button:hover {
-            color: var(--primary-color);
-        }
-        
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid #333;
-            margin-bottom: 20px;
-        }
-        
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            color: #aaa;
-        }
-        
-        .tab.active {
-            border-bottom-color: var(--primary-color);
-            color: var(--text-color);
-        }
-        
-        .add-video-button {
-            background-color: var(--primary-color);
+            padding: 3px 8px;
+            border-radius: 3px;
             color: white;
-            border: none;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            font-size: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-            z-index: 90;
         }
         
-        .add-video-button:hover {
-            background-color: var(--hover-color);
+        .status-ready {
+            background: #2ecc71;
+        }
+        
+        .status-processing {
+            background: #f39c12;
+        }
+        
+        #status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .success {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+        
+        .error {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
         }
     </style>
 </head>
 <body>
-    <header>
-        <a href="#" class="logo">StreamVerse</a>
-        <nav class="nav-links">
-            <a href="#" class="active">Home</a>
-            <a href="#">My Videos</a>
-            <a href="#">Profile</a>
-        </nav>
-    </header>
-
-    <main>
-        <section class="player-section" id="playerSection">
-            <div class="player-container">
-                <video id="videoPlayer" controls></video>
-                <div class="abr-info" id="abrInfo">Current quality: <span id="currentQuality">---</span></div>
-            </div>
-            <div class="player-info">
-                <h3 class="player-title" id="playerTitle">Video Title</h3>
-                <p class="player-description" id="playerDescription">Video description will appear here.</p>
-            </div>
-        </section>
-
-        <section>
-            <h2>My Videos</h2>
-            <div class="video-grid" id="videoGrid">
-                <div class="empty-state">
-                    <i class="fas fa-film"></i>
-                    <p>Your uploaded videos will appear here</p>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <div class="modal" id="uploadModal">
-        <div class="modal-content">
-            <span class="close-button" id="closeModal">&times;</span>
-            <h2>Upload New Video</h2>
+    <div class="container">
+        <header>
+            <div class="logo">SimpleStream</div>
+        </header>
+        
+        <div class="player-container" id="playerContainer">
+            <video id="player" controls></video>
+            <div class="quality-indicator" id="qualityIndicator">Auto (720p)</div>
+        </div>
+        
+        <div class="controls" id="qualityControls">
+            <button class="active" data-quality="auto">
+                <i class="fas fa-tachometer-alt"></i> Auto
+            </button>
+            <!-- Quality buttons will be added here -->
+        </div>
+        
+        <div class="upload-container">
+            <h2>Upload Video</h2>
             <form id="uploadForm">
-                <label for="videoFile">Select Video:</label>
-                <input type="file" id="videoFile" name="file" accept="video/*" required>
-                
-                <label for="title">Title:</label>
-                <input type="text" id="title" name="title" placeholder="Enter video title" required>
-                
-                <label for="description">Description:</label>
-                <textarea id="description" name="description" rows="3" placeholder="Enter video description"></textarea>
-                
-                <button type="submit">Upload Video</button>
+                <input type="file" id="videoFile" accept="video/*" required>
+                <input type="text" id="title" placeholder="Video Title" required>
+                <button type="submit">
+                    <i class="fas fa-cloud-upload-alt"></i> Upload
+                </button>
             </form>
-            <div id="loadingIndicator"><i class="fas fa-spinner"></i> Uploading... please wait</div>
             <div id="status"></div>
         </div>
+        
+        <h2>My Videos</h2>
+        <div class="video-grid" id="videoGrid"></div>
     </div>
 
-    <button class="add-video-button" id="addVideoButton"><i class="fas fa-plus"></i></button>
-
     <script>
-        // Configuration - replace with your actual server IP
-        const API_HOST = '13.218.123.213';
+        // Configuration - replace with your server IP
+        const API_HOST = '67.202.62.123';
         const UPLOAD_URL = `http://${API_HOST}:8000/api/videos/upload`;
         const DELIVERY_URL = `http://${API_HOST}:8001/videos`;
         
-        // Store uploaded videos
-        let uploadedVideos = [];
+        // State variables
+        let videos = [];
         let currentHls = null;
+        let currentVideoId = null;
+        let availableQualities = [];
         
-        // Modal functionality
-        const modal = document.getElementById('uploadModal');
-        const addButton = document.getElementById('addVideoButton');
-        const closeModal = document.getElementById('closeModal');
+        // Quality levels with proper ordering
+        const qualityLevels = {
+            "240p": { height: 240, order: 1 },
+            "360p": { height: 360, order: 2 },
+            "480p": { height: 480, order: 3 },
+            "720p": { height: 720, order: 4 },
+            "1080p": { height: 1080, order: 5 }
+        };
         
-        addButton.addEventListener('click', () => {
-            modal.style.display = 'block';
-        });
-        
-        closeModal.addEventListener('click', () => {
-            modal.style.display = 'none';
-        });
-        
-        window.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
-            }
-        });
-
-        // Set up form submission
-        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const statusDiv = document.getElementById('status');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            statusDiv.className = '';
-            statusDiv.textContent = '';
-            
-            const formData = new FormData();
-            const fileInput = document.getElementById('videoFile');
-            const titleInput = document.getElementById('title');
-            const descriptionInput = document.getElementById('description');
-            
-            if (!fileInput.files.length) {
-                showStatus('Please select a video file', 'error');
+        // Initialize player
+        function initPlayer() {
+            if (!Hls.isSupported()) {
+                showStatus("Your browser doesn't support HLS playback", "error");
                 return;
             }
             
+            // Set up quality control buttons
+            setupQualityControls();
+            
+            // Set up upload form
+            document.getElementById('uploadForm').addEventListener('submit', handleUpload);
+            
+            // Load videos
+            loadVideos();
+        }
+        
+        // Set up quality control buttons
+        function setupQualityControls() {
+            const controls = document.getElementById('qualityControls');
+            
+            // Add event listener for the auto button
+            controls.querySelector('button').addEventListener('click', () => {
+                selectQuality('auto');
+            });
+            
+            // Add quality buttons for standard qualities
+            for (const quality in qualityLevels) {
+                const button = document.createElement('button');
+                button.dataset.quality = quality;
+                button.innerHTML = `<i class="fas fa-play"></i> ${quality}`;
+                button.addEventListener('click', () => selectQuality(quality));
+                controls.appendChild(button);
+            }
+        }
+        
+        // Select quality level
+        function selectQuality(quality) {
+            if (!currentHls || !currentVideoId) return;
+            
+            // Update button states
+            const buttons = document.querySelectorAll('#qualityControls button');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            
+            if (quality === 'auto') {
+                // Enable auto level selection
+                currentHls.autoLevelEnabled = true;
+                currentHls.nextLevel = -1;
+                buttons[0].classList.add('active');
+                
+                // Show indicator
+                showQualityIndicator('Auto');
+            } else {
+                // Check if this quality is available
+                if (!availableQualities.includes(quality)) {
+                    showQualityIndicator(`${quality} not available`);
+                    setTimeout(() => hideQualityIndicator(), 2000);
+                    return;
+                }
+                
+                // Find level index for this quality
+                const levelIndex = findLevelIndexByHeight(currentHls.levels, qualityLevels[quality].height);
+                if (levelIndex !== -1) {
+                    // Disable auto level selection
+                    currentHls.autoLevelEnabled = false;
+                    currentHls.nextLevel = levelIndex;
+                    
+                    // Mark button as active
+                    const activeButton = Array.from(buttons).find(btn => btn.dataset.quality === quality);
+                    if (activeButton) activeButton.classList.add('active');
+                    
+                    // Show indicator
+                    showQualityIndicator(`Manual (${quality})`);
+                }
+            }
+        }
+        
+        // Find level index by height
+        function findLevelIndexByHeight(levels, targetHeight) {
+            for (let i = 0; i < levels.length; i++) {
+                const height = levels[i].height;
+                if (Math.abs(height - targetHeight) <= 10) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+        
+        // Get quality name from height
+        function getQualityNameFromHeight(height) {
+            for (const [name, data] of Object.entries(qualityLevels)) {
+                if (Math.abs(height - data.height) <= 10) {
+                    return name;
+                }
+            }
+            return `${height}p`;
+        }
+        
+        // Show quality indicator
+        function showQualityIndicator(text) {
+            const indicator = document.getElementById('qualityIndicator');
+            indicator.textContent = text;
+            indicator.classList.add('visible');
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                indicator.classList.remove('visible');
+            }, 3000);
+        }
+        
+        // Hide quality indicator
+        function hideQualityIndicator() {
+            document.getElementById('qualityIndicator').classList.remove('visible');
+        }
+        
+        // Play video
+        function playVideo(videoId) {
+            currentVideoId = videoId;
+            
+            // Load video metadata
+            fetch(`${DELIVERY_URL}/${videoId}/play`)
+                .then(response => {
+                    if (!response.ok) throw new Error("Video not ready");
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'ready') {
+                        loadHlsVideo(videoId);
+                    } else {
+                        showStatus("Video is still processing", "error");
+                    }
+                })
+                .catch(error => {
+                    showStatus(`Error: ${error.message}`, "error");
+                });
+        }
+        
+        // Modify HLS.js manifest to correctly handle the actual file paths
+        function modifyManifest(manifestUrl, manifestText) {
+            const videoId = currentVideoId;
+            
+            // Handle the master playlist text to ensure proper paths
+            if (manifestUrl.includes('master.m3u8')) {
+                // Replace variant playlist paths to use the segments/ prefix
+                // This maps UI's expected path to the backend path handler
+                // Example: 720p/playlist.m3u8 -> segments/720p/playlist.m3u8
+                return manifestText.replace(/^(#EXT-X-STREAM-INF:.*\n)(.+p\/playlist\.m3u8)$/gm, 
+                    (match, tag, uri) => {
+                        // Extract resolution from the URI (e.g., "720p")
+                        const resolution = uri.split('/')[0];
+                        return `${tag}segments/${resolution}/playlist.m3u8`;
+                    });
+            }
+            
+            // For variant playlists, make sure segment URIs use the right path
+            if (manifestUrl.includes('playlist.m3u8')) {
+                // Get the resolution from the URL (e.g., extract "720p" from "segments/720p/playlist.m3u8")
+                const urlParts = manifestUrl.split('/');
+                const resolutionIndex = urlParts.indexOf('segments') + 1;
+                const resolution = urlParts[resolutionIndex];
+                
+                // Replace segment URIs if needed
+                // No changes needed here since the backed handles the path mapping
+                return manifestText;
+            }
+            
+            return manifestText;
+        }
+        
+        // Load HLS video with optimal settings
+        function loadHlsVideo(videoId) {
+            const video = document.getElementById('player');
+            const masterUrl = `${DELIVERY_URL}/${videoId}/master.m3u8`;
+            
+            // Clean up previous instance
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+            
+            // Create new HLS instance with optimized settings
+            const hls = new Hls({
+                debug: false,
+                enableWorker: true,
+                startLevel: -1, // Auto level
+                autoStartLoad: true,
+                maxBufferLength: 30, // Buffer up to 30 seconds
+                maxMaxBufferLength: 60, // Allow up to 60 seconds in some conditions
+                capLevelToPlayerSize: true, // Match quality to player size
+                fragLoadingRetryDelay: 500, // Retry faster
+                manifestLoadingMaxRetry: 4, // More retries for manifest
+                levelLoadingMaxRetry: 4, // More retries for levels
+                fragLoadingMaxRetry: 6, // More retries for fragments
+                abrEwmaDefaultEstimate: 500000, // Start with 500kbps estimate
+                abrEwmaFastLive: 3.0, // Faster adaptation
+                abrEwmaSlowLive: 9.0, // More stable long-term
+                maxStarvationDelay: 4 // Faster recovery from buffer starvation
+            });
+            
+            currentHls = hls;
+            
+            // Add a manifestParsed hook to modify playlist URLs if needed
+            hls.on(Hls.Events.MANIFEST_LOADED, function(event, data) {
+                // Modify the manifest text if needed to ensure correct paths
+                if (data.networkDetails && data.networkDetails.response) {
+                    const manifestText = data.networkDetails.response;
+                    data.networkDetails.response = modifyManifest(data.url, manifestText);
+                }
+            });
+            
+            // Load source
+            hls.loadSource(masterUrl);
+            hls.attachMedia(video);
+            
+            // Handle events
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                // Start playback
+                video.play().catch(e => console.log("Autoplay prevented:", e));
+                
+                // Detect available qualities
+                availableQualities = [];
+                hls.levels.forEach(level => {
+                    const quality = getQualityNameFromHeight(level.height);
+                    if (!availableQualities.includes(quality)) {
+                        availableQualities.push(quality);
+                    }
+                });
+                
+                console.log("Available qualities:", availableQualities);
+                
+                // Update quality buttons - show only available qualities
+                const buttons = document.querySelectorAll('#qualityControls button');
+                buttons.forEach(btn => {
+                    const quality = btn.dataset.quality;
+                    if (quality === 'auto') return;
+                    btn.style.display = availableQualities.includes(quality) ? 'flex' : 'none';
+                });
+            });
+            
+            // Level switched event
+            hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+                if (hls.autoLevelEnabled) {
+                    const currentLevel = hls.levels[data.level];
+                    const qualityName = getQualityNameFromHeight(currentLevel.height);
+                    showQualityIndicator(`Auto (${qualityName})`);
+                }
+            });
+            
+            // Error handling
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                console.log("HLS Error:", data);
+                if (data.fatal) {
+                    switch(data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.log("Network error, trying to recover");
+                            hls.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.log("Media error, trying to recover");
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            console.error("Fatal error:", data);
+                            hls.destroy();
+                            showStatus("Playback error", "error");
+                            break;
+                    }
+                }
+            });
+        }
+        
+        // Handle video upload
+        async function handleUpload(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('videoFile');
+            const titleInput = document.getElementById('title');
+            
+            if (!fileInput.files.length) {
+                showStatus("Please select a video file", "error");
+                return;
+            }
+            
+            const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             formData.append('title', titleInput.value);
-            formData.append('description', descriptionInput.value || 'No description provided');
+            formData.append('description', 'Uploaded from simple player');
+            
+            showStatus("Uploading video...", "");
             
             try {
-                loadingIndicator.style.display = 'flex';
                 const response = await fetch(UPLOAD_URL, {
                     method: 'POST',
                     body: formData
                 });
                 
                 const result = await response.json();
-                loadingIndicator.style.display = 'none';
                 
                 if (!response.ok) {
-                    throw new Error(result.detail || 'Upload failed');
+                    throw new Error(result.detail || "Upload failed");
                 }
                 
-                showStatus(`Video uploaded successfully!`, 'success');
+                showStatus("Upload successful! Processing video...", "success");
                 
-                // Add to list and start polling for processing
-                const videoInfo = {
+                // Add to videos list
+                const video = {
                     id: result.video_id,
                     title: titleInput.value,
-                    description: descriptionInput.value || 'No description provided',
                     status: 'processing',
                     timestamp: new Date().toISOString()
                 };
-                uploadedVideos.push(videoInfo);
-                updateVideoGrid();
                 
-                // Start polling for this video
-                pollVideoStatus(result.video_id);
+                videos.unshift(video);
+                updateVideoGrid();
                 
                 // Reset form
                 document.getElementById('uploadForm').reset();
                 
-                // Close modal after successful upload
-                setTimeout(() => {
-                    modal.style.display = 'none';
-                }, 1500);
+                // Start polling for status
+                pollVideoStatus(video.id);
                 
             } catch (error) {
-                loadingIndicator.style.display = 'none';
-                showStatus(`Error: ${error.message}`, 'error');
+                showStatus(`Error: ${error.message}`, "error");
             }
-        });
-
+        }
+        
+        // Poll for video status
+        function pollVideoStatus(videoId) {
+            const interval = setInterval(() => {
+                fetch(`${DELIVERY_URL}/${videoId}/play`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'ready') {
+                            // Update video status
+                            const index = videos.findIndex(v => v.id === videoId);
+                            if (index !== -1) {
+                                videos[index].status = 'ready';
+                                updateVideoGrid();
+                            }
+                            clearInterval(interval);
+                        }
+                    })
+                    .catch(() => {}); // Ignore errors during polling
+            }, 5000);
+        }
+        
+        // Load videos (demo)
+        function loadVideos() {
+            // For demo: would normally fetch from server
+            updateVideoGrid();
+        }
+        
+        // Update video grid
+        function updateVideoGrid() {
+            const grid = document.getElementById('videoGrid');
+            grid.innerHTML = '';
+            
+            if (videos.length === 0) {
+                grid.innerHTML = '<div class="empty-message">No videos yet</div>';
+                return;
+            }
+            
+            videos.forEach(video => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                
+                const statusClass = video.status === 'ready' ? 'status-ready' : 'status-processing';
+                const statusText = video.status === 'ready' ? 'Ready' : 'Processing';
+                
+                card.innerHTML = `
+                    <div class="thumbnail">
+                        <i class="fas fa-play-circle"></i>
+                        <div class="status-badge ${statusClass}">${statusText}</div>
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title">${video.title}</div>
+                    </div>
+                `;
+                
+                if (video.status === 'ready') {
+                    card.addEventListener('click', () => playVideo(video.id));
+                }
+                
+                grid.appendChild(card);
+            });
+        }
+        
         // Show status message
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
             statusDiv.className = type;
         }
-
-        // Poll for video processing status
-        async function pollVideoStatus(videoId) {
-            // Find this video in our list
-            const videoIndex = uploadedVideos.findIndex(v => v.id === videoId);
-            if (videoIndex === -1) return;
-            
-            try {
-                // Poll every 5 seconds until ready
-                const pollInterval = setInterval(async () => {
-                    try {
-                        const response = await fetch(`${DELIVERY_URL}/${videoId}/play`);
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            
-                            if (data.status === 'ready') {
-                                // Update status
-                                uploadedVideos[videoIndex].status = 'ready';
-                                uploadedVideos[videoIndex].playbackUrl = data.playback_url;
-                                updateVideoGrid();
-                                clearInterval(pollInterval);
-                            }
-                        }
-                    } catch (error) {
-                        console.log(`Polling error for ${videoId}: ${error.message}`);
-                    }
-                }, 5000);
-                
-            } catch (error) {
-                console.error(`Error setting up polling for ${videoId}: ${error}`);
-            }
-        }
-
-        // Update the video grid UI
-        function updateVideoGrid() {
-            const container = document.getElementById('videoGrid');
-            
-            if (uploadedVideos.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-film"></i>
-                        <p>Your uploaded videos will appear here</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = '';
-            uploadedVideos.forEach(video => {
-                const videoCard = document.createElement('div');
-                videoCard.className = 'video-card';
-                
-                // Create a formatted date string
-                const timestamp = video.timestamp ? new Date(video.timestamp) : new Date();
-                const dateString = timestamp.toLocaleDateString(undefined, { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
-                
-                videoCard.innerHTML = `
-                    <div class="video-thumbnail">
-                        <div class="placeholder-thumbnail"></div>
-                        <div class="status-badge ${video.status === 'ready' ? 'status-ready' : 'status-processing'}">
-                            ${video.status === 'ready' ? 'Ready' : 'Processing'}
-                        </div>
-                        ${video.status === 'ready' ? '<i class="fas fa-play-circle play-icon"></i>' : ''}
-                    </div>
-                    <div class="video-info">
-                        <h3 class="video-title">${video.title}</h3>
-                        <div class="video-meta">${dateString}</div>
-                    </div>
-                `;
-                
-                if (video.status === 'ready') {
-                    videoCard.addEventListener('click', () => playVideo(video));
-                }
-                
-                container.appendChild(videoCard);
-            });
-        }
-
-        // Play a video
-        function playVideo(video) {
-            const videoPlayer = document.getElementById('videoPlayer');
-            const playerSection = document.getElementById('playerSection');
-            const playerTitle = document.getElementById('playerTitle');
-            const playerDescription = document.getElementById('playerDescription');
-            const abrInfo = document.getElementById('abrInfo');
-            const currentQuality = document.getElementById('currentQuality');
-            
-            // Set title and description
-            playerTitle.textContent = video.title;
-            playerDescription.textContent = video.description;
-            
-            // Show player section
-            playerSection.style.display = 'block';
-            
-            // Scroll to player
-            playerSection.scrollIntoView({ behavior: 'smooth' });
-            
-            const playbackUrl = `${DELIVERY_URL}/${video.id}/master.m3u8`;
-            
-            // Clean up previous HLS instance if exists
-            if (currentHls) {
-                currentHls.destroy();
-                currentHls = null;
-            }
-            
-            if (Hls.isSupported()) {
-                const hls = new Hls({
-                    debug: false,
-                    // ABR configuration
-                    autoStartLoad: true,
-                    startLevel: -1, // -1 means automatic selection
-                    abrEwmaDefaultEstimate: 500000, // Default bandwidth estimate
-                    abrEwmaFastLive: 3.0,
-                    abrEwmaSlowLive: 9.0
-                });
-                
-                currentHls = hls;
-                
-                hls.loadSource(playbackUrl);
-                hls.attachMedia(videoPlayer);
-                
-                // Listen for quality level changes to demonstrate ABR
-                hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
-                    const level = hls.levels[data.level];
-                    if (level) {
-                        const height = level.height || 'unknown';
-                        const bitrate = level.bitrate ? Math.round(level.bitrate / 1000) : 'unknown';
-                        currentQuality.textContent = `${height}p (${bitrate} kbps)`;
-                        
-                        // Show ABR info for a few seconds
-                        abrInfo.classList.add('visible');
-                        setTimeout(() => {
-                            abrInfo.classList.remove('visible');
-                        }, 5000);
-                    }
-                });
-                
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    videoPlayer.play();
-                    
-                    // Show available quality levels in console
-                    console.log('Available quality levels:', hls.levels.map(level => ({
-                        height: level.height,
-                        width: level.width,
-                        bitrate: Math.round(level.bitrate / 1000) + ' kbps'
-                    })));
-                });
-            } 
-            else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                // For Safari
-                videoPlayer.src = playbackUrl;
-                videoPlayer.addEventListener('loadedmetadata', function() {
-                    videoPlayer.play();
-                });
-                // Note: Native HLS in Safari doesn't provide easy quality change notifications
-                currentQuality.textContent = 'Auto (Native HLS)';
-            }
-            else {
-                showStatus('HLS is not supported in your browser', 'error');
-            }
-        }
-
-        // Initialize
-        updateVideoGrid();
         
-        // Add some demo data if you want to test the UI without uploading
-        function addDemoData() {
-            if (uploadedVideos.length === 0) {
-                uploadedVideos = [
-                    {
-                        id: 'demo-1',
-                        title: 'Example Video 1',
-                        description: 'This is a demo video to show the UI layout.',
-                        status: 'ready',
-                        timestamp: new Date().toISOString()
-                    },
-                    {
-                        id: 'demo-2',
-                        title: 'Example Video 2',
-                        description: 'Another demo video that is still processing.',
-                        status: 'processing',
-                        timestamp: new Date().toISOString()
-                    }
-                ];
-                updateVideoGrid();
-            }
-        }
-        
-        // Uncomment to add demo data
-        // addDemoData();
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initPlayer);
     </script>
 </body>
 </html>
