@@ -129,7 +129,8 @@ async def stream_from_s3(bucket: str, key: str) -> Response:
         
     except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchKey':
-            raise HTTPException(status_code=404, detail="Resource not found")
+            logger.error(f"Resource not found in S3: {key}")
+            raise HTTPException(status_code=404, detail=f"Resource not found: {key}")
         logger.error(f"Error streaming from S3: {str(e)}")
         raise HTTPException(status_code=500, detail="Error accessing content")
 
