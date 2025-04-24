@@ -264,7 +264,7 @@
 
     <script>
         // Configuration - replace with your server IP
-        const API_HOST = '98.84.171.95';
+        const API_HOST = '54.173.5.198';
         const UPLOAD_URL = `http://${API_HOST}:8000/api/videos/upload`;
         const DELIVERY_URL = `http://${API_HOST}:8001/videos`;
         
@@ -484,159 +484,150 @@
                 });
         }
         
-        // Modify HLS.js manifest to handle the actual file paths
-        function modifyManifest(manifestUrl, manifestText) {
-            // No need to modify paths anymore since backend handles them correctly
-            return manifestText;
-        }
+// Replace the modifyManifest function and related code in your HTML file
+
+// Modify HLS.js manifest to handle the correct S3 path structure
+function modifyManifest(manifestUrl, manifestText) {
+    const videoId = currentVideoId;
+    
+    // For master playlist, we need to ensure the variant playlist paths are correct
+    if (manifestUrl.includes('master.m3u8')) {
+        // The master playlist contains paths like "720p/playlist.m3u8"
+        // These paths are already correct for your S3 structure, so NO changes needed
+        return manifestText;
+    }
+    
+    // For variant playlists (like 360p/playlist.m3u8), no changes needed
+    // Segment references in these playlists should already be correct
+    return manifestText;
+}
+
+// Load HLS video with optimized settings
+function loadHlsVideo(videoId) {
+    const video = document.getElementById('player');
+    const masterUrl = `${DELIVERY_URL}/${videoId}/master.m3u8`;
+    
+    // Clean up previous instance
+    if (currentHls) {
+        currentHls.destroy();
+        currentHls = null;
+    }
+    
+    // Create new HLS instance with optimized settings
+    const hls = new Hls({
+        debug: false,
+        enableWorker: true,
+        startLevel: -1, // Auto level selection
+        autoStartLoad: true,
         
-        // Load HLS video with optimized settings for faster segment downloading
-        function loadHlsVideo(videoId) {
-            const video = document.getElementById('player');
-            const masterUrl = `${DELIVERY_URL}/${videoId}/master.m3u8`;
-            
-            // Clean up previous instance
-            if (currentHls) {
-                currentHls.destroy();
-                currentHls = null;
-            }
-            
-            // Create new HLS instance with significantly optimized settings for faster downloads
-            const hls = new Hls({
-                debug: false,
-                enableWorker: true,
-                startLevel: -1, // Auto level selection
-                autoStartLoad: true,
-                
-                // Optimize buffer settings
-                maxBufferLength: 60,       // Buffer up to 60 seconds
-                maxMaxBufferLength: 120,   // Allow up to 120 seconds buffer in good conditions
-                maxBufferSize: 60*1000*1000, // 60MB max buffer size
-                maxBufferHole: 0.5,        // More aggressive filling of buffer holes
-                
-                // Improve bandwidth adaptation
-                abrEwmaDefaultEstimate: 1000000, // Start with 1Mbps estimate
-                abrEwmaFastLive: 3.0,
-                abrEwmaSlowLive: 9.0,
-                
-                // Reduce ABR switching frequency
-                abrBandWidthFactor: 0.95,  // Be slightly more conservative
-                abrBandWidthUpFactor: 0.7, // Don't jump up quality too quickly
-                
-                // Network optimizations
-                maxStarvationDelay: 4,     // Faster recovery from starvation
-                maxLoadingDelay: 4,        // Shorter delay for loading
-                lowLatencyMode: false,     // Not using low latency mode for better buffering
-                
-                // Timeouts
-                manifestLoadingTimeOut: 10000,    // 10 seconds for manifest
-                manifestLoadingMaxRetry: 4,       // More retries
-                manifestLoadingRetryDelay: 500,   // Start retry faster
-                levelLoadingTimeOut: 10000,       // 10 seconds for level loading
-                fragLoadingTimeOut: 20000,        // 20 seconds for fragment loading
-                fragLoadingMaxRetry: 6,           // More retries for fragments
-                
-                // Parallel loading optimizations
-                requestMediaOnStart: true, // Start loading media immediately
-                appendErrorMaxRetry: 3,     // Retry appending segments
-                testBandwidth: true,       // Enable bandwidth testing
-                
-                // Setup XHR with higher timeouts
-                xhrSetup: function(xhr) {
-                    xhr.timeout = 30000; // 30 seconds timeout for XHR requests
-                }
-            });
-            
-            currentHls = hls;
-            
-            // Load source
-            hls.loadSource(masterUrl);
-            hls.attachMedia(video);
-            
-            // Handle events
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                // Start playback
-                video.play().catch(e => console.log("Autoplay prevented:", e));
-                
-                // Detect available qualities
-                availableQualities = [];
-                hls.levels.forEach(level => {
-                    const quality = getQualityNameFromHeight(level.height);
-                    if (!availableQualities.includes(quality)) {
-                        availableQualities.push(quality);
-                    }
-                });
-                
-                console.log("Available qualities:", availableQualities);
-                
-                // Update quality buttons - show only available qualities
-                const buttons = document.querySelectorAll('#qualityControls button');
-                buttons.forEach(btn => {
-                    const quality = btn.dataset.quality;
-                    if (quality === 'auto' || btn.id === 'toggleStats') return;
-                    btn.style.display = availableQualities.includes(quality) ? 'flex' : 'none';
-                });
-            });
-            
-            // Level switched event
-            hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-                if (hls.autoLevelEnabled) {
-                    const currentLevel = hls.levels[data.level];
-                    const qualityName = getQualityNameFromHeight(currentLevel.height);
-                    showQualityIndicator(`Auto (${qualityName})`);
-                }
-            });
-            
-            // Progress monitoring - log download speeds for debugging
-            hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
-                const frag = data.frag;
-                const loadTime = data.stats.tload - data.stats.trequest;
-                const byteLength = data.stats.loaded;
-                const bps = Math.round((byteLength * 8) / (loadTime / 1000));
-                
-                // Update download stats
-                downloadStats.segments++;
-                downloadStats.totalBytes += byteLength;
-                downloadStats.bpsHistory.push(bps);
-                
-                // Keep history at reasonable size
-                if (downloadStats.bpsHistory.length > 10) {
-                    downloadStats.bpsHistory.shift();
-                }
-                
-                // Update averages
-                const sum = downloadStats.bpsHistory.reduce((a, b) => a + b, 0);
-                downloadStats.avgBps = sum / downloadStats.bpsHistory.length;
-                downloadStats.peakBps = Math.max(downloadStats.peakBps, bps);
-                
-                console.log(`Segment downloaded: ${Math.round(byteLength/1024)}KB in ${loadTime}ms - ${Math.round(bps/1024)}kbps`);
-            });
-            
-            // More aggressive error handling
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                console.log("HLS Error:", data);
-                if (data.fatal) {
-                    switch(data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            console.log("Network error, trying to recover");
-                            hls.startLoad();
-                            break;
-                        case Hls.ErrorTypes.MEDIA_ERROR:
-                            console.log("Media error, trying to recover");
-                            hls.recoverMediaError();
-                            break;
-                        default:
-                            console.error("Fatal error:", data);
-                            // Try to recover anyway with a reload
-                            setTimeout(() => {
-                                hls.destroy();
-                                loadHlsVideo(videoId);
-                            }, 1000);
-                            break;
-                    }
-                }
-            });
+        // Optimize buffer settings
+        maxBufferLength: 60,       // Buffer up to 60 seconds
+        maxMaxBufferLength: 120,   // Allow up to 120 seconds buffer in good conditions
+        maxBufferSize: 60*1000*1000, // 60MB max buffer size
+        maxBufferHole: 0.5,        // More aggressive filling of buffer holes
+        
+        // Improve bandwidth adaptation
+        abrEwmaDefaultEstimate: 1000000, // Start with 1Mbps estimate
+        abrEwmaFastLive: 3.0,
+        abrEwmaSlowLive: 9.0,
+        
+        // Reduce ABR switching frequency
+        abrBandWidthFactor: 0.95,  // Be slightly more conservative
+        abrBandWidthUpFactor: 0.7, // Don't jump up quality too quickly
+        
+        // Network optimizations
+        maxStarvationDelay: 4,     // Faster recovery from starvation
+        maxLoadingDelay: 4,        // Shorter delay for loading
+        
+        // Timeouts
+        manifestLoadingTimeOut: 10000,    // 10 seconds for manifest
+        manifestLoadingMaxRetry: 4,       // More retries
+        manifestLoadingRetryDelay: 500,   // Start retry faster
+        levelLoadingTimeOut: 10000,       // 10 seconds for level loading
+        fragLoadingTimeOut: 20000,        // 20 seconds for fragment loading
+        fragLoadingMaxRetry: 6,           // More retries for fragments
+        
+        // Setup XHR with higher timeouts
+        xhrSetup: function(xhr) {
+            xhr.timeout = 30000; // 30 seconds timeout for XHR requests
         }
+    });
+    
+    currentHls = hls;
+    
+    // Load source
+    hls.loadSource(masterUrl);
+    hls.attachMedia(video);
+    
+    // Handle events
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Start playback
+        video.play().catch(e => console.log("Autoplay prevented:", e));
+        
+        // Detect available qualities
+        availableQualities = [];
+        hls.levels.forEach(level => {
+            const quality = getQualityNameFromHeight(level.height);
+            if (!availableQualities.includes(quality)) {
+                availableQualities.push(quality);
+            }
+        });
+        
+        console.log("Available qualities:", availableQualities);
+        
+        // Update quality buttons - show only available qualities
+        const buttons = document.querySelectorAll('#qualityControls button');
+        buttons.forEach(btn => {
+            const quality = btn.dataset.quality;
+            if (quality === 'auto') return;
+            btn.style.display = availableQualities.includes(quality) ? 'flex' : 'none';
+        });
+    });
+    
+    // Level switched event
+    hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+        if (hls.autoLevelEnabled) {
+            const currentLevel = hls.levels[data.level];
+            const qualityName = getQualityNameFromHeight(currentLevel.height);
+            showQualityIndicator(`Auto (${qualityName})`);
+        }
+    });
+    
+    // Progress monitoring - log download speeds
+    hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+        const frag = data.frag;
+        const loadTime = data.stats.tload - data.stats.trequest;
+        const byteLength = data.stats.loaded;
+        const bps = Math.round((byteLength * 8) / (loadTime / 1000));
+        
+        console.log(`Segment downloaded: ${Math.round(byteLength/1024)}KB in ${loadTime}ms - ${Math.round(bps/1024)}kbps`);
+    });
+    
+    // Improved error handling
+    hls.on(Hls.Events.ERROR, (event, data) => {
+        console.log("HLS Error:", data);
+        if (data.fatal) {
+            switch(data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                    console.log("Network error, trying to recover");
+                    hls.startLoad();
+                    break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                    console.log("Media error, trying to recover");
+                    hls.recoverMediaError();
+                    break;
+                default:
+                    console.error("Fatal error:", data);
+                    // Try to recover anyway with a reload
+                    setTimeout(() => {
+                        hls.destroy();
+                        loadHlsVideo(videoId);
+                    }, 1000);
+                    break;
+            }
+        }
+    });
+}
         
         // Handle video upload
         async function handleUpload(e) {

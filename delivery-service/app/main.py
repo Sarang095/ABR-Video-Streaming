@@ -222,11 +222,11 @@ async def get_video_info(video_id: str):
 async def serve_video_file(video_id: str, file_path: str):
     """
     Serve video files directly from S3 with proper path handling.
-    No more path remapping confusion.
+    Direct mapping to actual S3 structure with no "segments" folder.
     """
     logger.info(f"Requested file: {video_id}/{file_path}")
     
-    # Simple path handling - direct mapping to S3 structure
+    # Simple direct path handling - exactly as in S3
     s3_key = f"{video_id}/{file_path}"
     return await stream_from_s3(processed_bucket, s3_key)
 
