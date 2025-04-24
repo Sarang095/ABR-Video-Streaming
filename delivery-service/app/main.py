@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 import boto3
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from botocore.exceptions import ClientError
@@ -30,23 +30,36 @@ sqs_client = boto3.client('sqs', region_name=os.getenv("AWS_REGION", "us-east-1"
 processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
 delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
 
-# Simple cache for video metadata
+# Simple cache for video metadata and content caching
 video_cache = {}
+content_cache = {}  # Simple memory cache for small files like playlists
 cache_ttl = 300  # 5 minutes
 
-async def stream_from_s3(bucket: str, key: str) -> StreamingResponse:
+async def stream_from_s3(bucket: str, key: str) -> Response:
     """
-    Stream content directly from S3 without any complex logic.
+    Optimized streaming function that implements different strategies for playlists vs segments
     
     Args:
         bucket: S3 bucket name
         key: S3 object key
         
     Returns:
-        StreamingResponse with the S3 object content
+        StreamingResponse or Response depending on content type
     """
     try:
-        # Get object
+        # Check if we have this content cached (for small files like playlists)
+        cache_key = f"{bucket}:{key}"
+        if key.endswith(".m3u8") and cache_key in content_cache:
+            cache_entry = content_cache[cache_key]
+            # Check if cache is still valid
+            if time.time() - cache_entry["timestamp"] < 10:  # 10 seconds TTL for playlists
+                logger.info(f"Cache hit for {key}")
+                return Response(
+                    content=cache_entry["content"],
+                    headers=cache_entry["headers"]
+                )
+        
+        # Get object from S3
         response = await asyncio.to_thread(
             s3_client.get_object,
             Bucket=bucket,
@@ -60,29 +73,59 @@ async def stream_from_s3(bucket: str, key: str) -> StreamingResponse:
         elif key.endswith(".ts"):
             content_type = "video/MP2T"
         
-        # Create an async generator to stream the content
-        async def stream_content():
-            body = response['Body']
-            while True:
-                chunk = await asyncio.to_thread(body.read, 8192)  # 8KB chunks
-                if not chunk:
-                    break
-                yield chunk
-            await asyncio.to_thread(body.close)
+        # For small files like playlists, fetch all at once to reduce latency
+        if key.endswith(".m3u8"):
+            content = await asyncio.to_thread(response['Body'].read)
+            await asyncio.to_thread(response['Body'].close)
+            
+            headers = {
+                "Content-Type": content_type,
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Cache-Control": "max-age=10",  # Short client-side cache for playlists
+            }
+            
+            # Cache the playlist content
+            content_cache[cache_key] = {
+                "content": content,
+                "headers": headers,
+                "timestamp": time.time()
+            }
+            
+            return Response(content=content, headers=headers)
         
-        # Setup headers for HLS content
-        headers = {
-            "Content-Type": content_type,
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Cache-Control": "max-age=31536000" if key.endswith(".ts") else "max-age=10",
-        }
-        
-        return StreamingResponse(
-            stream_content(),
-            headers=headers
-        )
+        # For segment files, optimize for streaming with larger chunks
+        else:
+            content_length = int(response.get('ContentLength', 0))
+            
+            async def stream_content():
+                body = response['Body']
+                # Use larger chunks for video segments (1MB chunks)
+                chunk_size = 1024 * 1024
+                try:
+                    while True:
+                        chunk = await asyncio.to_thread(body.read, chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    await asyncio.to_thread(body.close)
+            
+            headers = {
+                "Content-Type": content_type,
+                "Content-Length": str(content_length),
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Cache-Control": "max-age=604800",  # Cache segments for 7 days on client
+                "Accept-Ranges": "bytes"
+            }
+            
+            return StreamingResponse(
+                stream_content(),
+                headers=headers
+            )
         
     except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchKey':
@@ -139,7 +182,7 @@ async def poll_sqs_queue():
 async def startup_event():
     """Start the SQS polling task on app startup."""
     asyncio.create_task(poll_sqs_queue())
-    logger.info("Simple video delivery service started")
+    logger.info("Optimized video delivery service started")
 
 @app.get("/videos/{video_id}/play")
 async def get_video_info(video_id: str):
@@ -178,38 +221,21 @@ async def get_video_info(video_id: str):
 @app.get("/videos/{video_id}/{file_path:path}")
 async def serve_video_file(video_id: str, file_path: str):
     """
-    Serve any video file directly from S3.
-    This handles both manifest and segment files with the correct structure.
+    Serve video files directly from S3 with proper path handling.
+    No more path remapping confusion.
     """
     logger.info(f"Requested file: {video_id}/{file_path}")
     
-    # Handle the master playlist
-    if file_path == "master.m3u8":
-        s3_key = f"{video_id}/master.m3u8"
-        return await stream_from_s3(processed_bucket, s3_key)
-    
-    # Handle the segments paths based on the actual structure
-    if file_path.startswith("segments/"):
-        # The player UI requests in format: segments/360p/playlist.m3u8 or segments/360p/segment_000.ts
-        parts = file_path.split("/")
-        if len(parts) >= 2:
-            resolution = parts[1]  # This gets the "360p" part
-            remaining_path = "/".join(parts[2:])  # This gets "playlist.m3u8" or segment files
-            
-            # Map to actual structure: video_id/360p/playlist.m3u8 or video_id/360p/segment_000.ts
-            s3_key = f"{video_id}/{resolution}/{remaining_path}"
-            logger.info(f"Remapped path: {file_path} → {s3_key}")
-            return await stream_from_s3(processed_bucket, s3_key)
-    
-    # For all other files, use the original path structure
+    # Simple path handling - direct mapping to S3 structure
     s3_key = f"{video_id}/{file_path}"
     return await stream_from_s3(processed_bucket, s3_key)
 
 @app.get("/healthcheck")
 async def healthcheck():
     """Health check endpoint."""
-    return {"status": "ok", "service": "simple-video-delivery"}
+    return {"status": "ok", "service": "optimized-video-delivery"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Increase workers to handle more concurrent connections
+    uvicorn.run(app, host="0.0.0.0", port=8000, workers=4)
