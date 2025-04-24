@@ -35,6 +35,31 @@ video_cache = {}
 content_cache = {}  # Simple memory cache for small files like playlists
 cache_ttl = 300  # 5 minutes
 
+def remap_path(video_id: str, file_path: str) -> str:
+    """
+    Remap frontend path to actual S3 path structure
+    
+    Args:
+        video_id: Video ID
+        file_path: Frontend path
+        
+    Returns:
+        The actual S3 key
+    """
+    # Handle master playlist
+    if file_path == "master.m3u8":
+        return f"{video_id}/master.m3u8"
+    
+    # Fix the path structure for quality playlists and segments
+    # From: segments/480p/playlist.m3u8 or segments/480p/segment_000.ts 
+    # To: 480p/playlist.m3u8 or 480p/segment_000.ts
+    if "segments/" in file_path:
+        # Remove the 'segments/' prefix
+        return f"{video_id}/{file_path.replace('segments/', '')}"
+    
+    # Handle other paths directly
+    return f"{video_id}/{file_path}"
+
 async def stream_from_s3(bucket: str, key: str) -> Response:
     """
     Optimized streaming function that implements different strategies for playlists vs segments
@@ -60,6 +85,7 @@ async def stream_from_s3(bucket: str, key: str) -> Response:
                 )
         
         # Get object from S3
+        logger.debug(f"Fetching from S3: {bucket}/{key}")
         response = await asyncio.to_thread(
             s3_client.get_object,
             Bucket=bucket,
@@ -222,13 +248,15 @@ async def get_video_info(video_id: str):
 @app.get("/videos/{video_id}/{file_path:path}")
 async def serve_video_file(video_id: str, file_path: str):
     """
-    Serve video files directly from S3 with proper path handling.
-    Direct mapping to actual S3 structure with no "segments" folder.
+    Serve video files directly from S3 with proper path remapping.
+    Maps frontend path requests to actual S3 structure.
     """
     logger.info(f"Requested file: {video_id}/{file_path}")
     
-    # Simple direct path handling - exactly as in S3
-    s3_key = f"{video_id}/{file_path}"
+    # Remap the path to match S3 structure
+    s3_key = remap_path(video_id, file_path)
+    logger.info(f"Remapped to S3 key: {s3_key}")
+    
     return await stream_from_s3(processed_bucket, s3_key)
 
 @app.get("/healthcheck")

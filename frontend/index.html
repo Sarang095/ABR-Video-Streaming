@@ -503,13 +503,9 @@
                 }
                 
                 load(context, config, callbacks) {
-                    // Fix common issues with segment paths
+                    // Debug logging for URL debugging
                     if (context.url) {
-                        const url = context.url;
-                        console.log("Original URL:", url);
-                        
-                        // We don't need to modify URLs - the server should return the correct paths
-                        // This section remains for debugging if needed
+                        console.log("Loading URL:", context.url);
                     }
                     
                     // Call original loader
