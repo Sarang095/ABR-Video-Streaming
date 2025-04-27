@@ -1,0 +1,17 @@
+# base/network/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-microservices
+  namespace: video-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: streamforge
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: video-platform
+  egress:
+  - {}

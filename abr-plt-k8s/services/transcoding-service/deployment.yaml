@@ -1,0 +1,57 @@
+# services/transcoding-service/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transcoding-service
+  namespace: video-platform
+  labels:
+    app: streamforge
+    service: transcoding
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: streamforge
+      service: transcoding
+  strategy:
+    type: Recreate  # Since transcoding is stateful process so the pod identity should not be changed
+  template:
+    metadata:
+      labels:
+        app: streamforge
+        service: transcoding
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/transcoding
+                operator: Exists
+      containers:
+      - name: transcoding-service
+        image: csag095/transcoding-service:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: configmp
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        volumeMounts:
+        - name: transcoding-temp
+          mountPath: /tmp/transcoding
+      volumes:
+      - name: transcoding-temp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi  #We are doing In-memory storage for faster transcoding
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "transcoding"
+        effect: "NoSchedule"

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmp
+  namespace: video-platform
+data:
+  S3_PROCESSED_BUCKET: "processed-s3-bucket-49"
+  S3_RAW_BUCKET: "s3-raw-bucket-49"
+  SQS_TRANSCODING_QUEUE: "https://sqs.us-east-1.amazonaws.com/891612545820/ABR-Streaming-Queue"
+  DELIVERY_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue"
+  MONGODB_DATABASE: "video_platform"
+  MONGO_DB: "abr_streaming"
+  MONGO_URI: "mongodb://mongodb-service.video-platform.svc.cluster.local:27017/abr_streaming"

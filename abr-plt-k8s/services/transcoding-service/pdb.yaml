@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: transcoding-service-pdb
+  namespace: video-platform
+spec:
+  minAvailable: 1  
+  selector:
+    matchLabels:
+      app: streamforge
+      service: transcoding

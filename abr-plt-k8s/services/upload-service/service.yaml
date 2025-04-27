@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: upload-service
+  namespace: video-platform
+  labels:
+    app: streamforge
+    service: upload
+spec:
+  selector:
+    app: streamforge
+    service: upload
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  type: ClusterIP
