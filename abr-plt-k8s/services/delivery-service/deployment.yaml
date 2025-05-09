@@ -23,6 +23,7 @@ spec:
         app: streamforge
         service: delivery
     spec:
+      serviceAccountName: sqs-access-sa
       containers:
       - name: delivery-service
         image: csag095/delivery-service:latest

@@ -23,6 +23,7 @@ spec:
         app: streamforge
         service: upload
     spec:
+      serviceAccountName: sqs-access-sa
       containers:
       - name: upload-service
         image: csag095/upload-service:latest

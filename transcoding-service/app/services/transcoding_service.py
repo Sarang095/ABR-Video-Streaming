@@ -34,7 +34,7 @@ class TranscodingService:
             
         self.raw_bucket = os.getenv("S3_RAW_BUCKET", "s3-raw-bucket-49")
         self.processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
-        self.delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
+        self.delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/014249603349/video-delivery-queue")
         
         # Connect to MongoDB directly
         mongo_uri = os.getenv("MONGO_URI", "localhost:27017")

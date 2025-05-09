@@ -23,7 +23,7 @@ class UploadService:
         self.sqs_client = boto3.client("sqs", region_name=os.getenv("AWS_REGION", "us-east-1"))  # declared the sqs client which handles the communication with the sqs queue and we use this client to access the queue and messages
 
         # declared the queue to use for the upload service named abr_streaming
-        self.transcoding_queue_url = os.getenv("SQS_TRANSCODING_QUEUE", "https://sqs.us-east-1.amazonaws.com/891612545820/ABR-Streaming-Queue")
+        self.transcoding_queue_url = os.getenv("SQS_TRANSCODING_QUEUE", "https://sqs.us-east-1.amazonaws.com/014249603349/ABR-Streaming-Queue")
 
     # Helper method to upload file to S3
     async def _upload_to_s3(self, file: UploadFile, s3_key: str):

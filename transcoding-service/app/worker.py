@@ -15,7 +15,7 @@ load_dotenv()
 init_app()
 
 sqs_client = boto3.client('sqs', region_name=os.getenv("AWS_REGION", "us-east-1"))
-transcoding_queue_url = os.getenv("SQS_TRANSCODING_QUEUE", "https://sqs.us-east-1.amazonaws.com/891612545820/ABR-Streaming-Queue")
+transcoding_queue_url = os.getenv("SQS_TRANSCODING_QUEUE", "https://sqs.us-east-1.amazonaws.com/014249603349/ABR-Streaming-Queue")
 transcoding_service = TranscodingService()
 
 async def poll_queue():

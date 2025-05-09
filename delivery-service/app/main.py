@@ -28,7 +28,7 @@ sqs_client = boto3.client('sqs', region_name=os.getenv("AWS_REGION", "us-east-1"
 
 # Get configuration from environment
 processed_bucket = os.getenv("S3_PROCESSED_BUCKET", "processed-s3-bucket-49")
-delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/891612545820/video-delivery-queue")
+delivery_queue_url = os.getenv("DELIVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/014249603349/video-delivery-queue")
 
 # Simple cache for video metadata and content caching
 video_cache = {}

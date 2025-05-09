@@ -28,6 +28,7 @@ spec:
             - matchExpressions:
               - key: node-role.kubernetes.io/transcoding
                 operator: Exists
+      serviceAccountName: sqs-access-sa
       containers:
       - name: transcoding-service
         image: csag095/transcoding-service:latest
