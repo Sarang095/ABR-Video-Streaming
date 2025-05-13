@@ -87,6 +87,5 @@ GitHub Actions CI/CD pipeline with OIDC integration for keyless AWS authenticati
 - **Node Affinity**: Compute-intensive workloads on optimized instances
 - **Resource Quotas**: Proper CPU/memory allocation
 - **Storage**: Doing In-memory storage for faster transcoding for transcoding pods
-
-
+###
 
