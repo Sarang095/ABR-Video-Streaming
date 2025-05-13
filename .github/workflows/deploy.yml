@@ -164,15 +164,9 @@ jobs:
             --set transcodingService.image.tag=${{ needs.build-and-push.outputs.version }} \
             --set deliveryService.image.tag=${{ needs.build-and-push.outputs.version }}
 
-      - name: Wait for all pods to be Ready
+      - name: List pods in video-platform namespace
         run: |
-          kubectl wait pods --all \
-            --namespace video-platform \
-            --timeout=340s
-
-      - name: List all pods in video-platform
-        run: |
-          kubectl get pods --namespace video-platform
+          kubectl get pods --namespace=video-platform
 
       - name: Delete EKS cluster
         if: always() && steps.create-cluster.outcome != 'skipped'
