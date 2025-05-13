@@ -3,4 +3,4 @@ kind: ServiceAccount
 metadata:
   name: sqs-access-sa
   annotations:
-    iam.amazonaws.com/role: arn:aws:iam::014249603349:role/Kiam-SQS-Access-Role
+    iam.amazonaws.com/role: arn:aws:iam::014249603349:role/ABR-SQS-Access

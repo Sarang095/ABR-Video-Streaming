@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery-service
+  namespace: video-platform
+  labels:
+    app: streamforge
+    service: delivery
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: streamforge
+      service: delivery
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: streamforge
+        service: delivery
+    spec:
+      serviceAccountName: sqs-access-sa
+      containers:
+      - name: delivery-service
+        image: "{{ .Values.deliveryService.image }}"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: configmp

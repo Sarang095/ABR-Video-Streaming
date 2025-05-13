@@ -1,0 +1,13 @@
+# base/storage/persistent-volumes.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-data
+  namespace: video-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: streamforge-storage
+  resources:
+    requests:
+      storage: 5Gi

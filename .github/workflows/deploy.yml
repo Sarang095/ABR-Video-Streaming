@@ -1,0 +1,182 @@
+name: Build, Push, and Deploy ABR Video Streaming App
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  id-token: write
+  contents: write
+
+
+env:
+  UPLOAD_IMAGE: csag095/upload-service
+  TRANSCODING_IMAGE: csag095/transcoding-service
+  DELIVERY_IMAGE: csag095/delivery-service
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ABR-Admin-Access
+          aws-region: us-east-1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.UPLOAD_IMAGE }}
+            ${{ env.TRANSCODING_IMAGE }}
+            ${{ env.DELIVERY_IMAGE }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest
+
+      - name: Build and push upload-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./upload-service
+          push: true
+          tags: |
+            ${{ env.UPLOAD_IMAGE }}:latest
+            ${{ env.UPLOAD_IMAGE }}:${{ steps.meta.outputs.version }}
+
+      - name: Build and push transcoding-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./transcoding-service
+          push: true
+          tags: |
+            ${{ env.TRANSCODING_IMAGE }}:latest
+            ${{ env.TRANSCODING_IMAGE }}:${{ steps.meta.outputs.version }}
+
+      - name: Build and push delivery-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./delivery-service
+          push: true
+          tags: |
+            ${{ env.DELIVERY_IMAGE }}:latest
+            ${{ env.DELIVERY_IMAGE }}:${{ steps.meta.outputs.version }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ABR-Admin-Access
+          aws-region: us-east-1
+
+      - name: Install eksctl
+        run: |
+          curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+          sudo mv /tmp/eksctl /usr/local/bin
+          eksctl version
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          kubectl version --client
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version
+
+      - name: Create EKS cluster
+        id: create-cluster
+        run: |
+          eksctl create cluster \
+            --name stream-forge \
+            --version 1.32 \
+            --region us-east-1 \
+            --nodegroup-name workers \
+            --node-type t2.micro \
+            --nodes 3 \
+            --nodes-min 3 \
+            --nodes-max 5 \
+            --managed \
+            --node-volume-size 8 \
+            --with-oidc \
+            --asg-access
+
+      - name: Create namespace with Helm ownership
+        run: |
+          # Create namespace with Helm labels and annotations
+          kubectl create namespace video-platform --dry-run=client -o yaml > namespace.yaml
+          kubectl apply -f namespace.yaml
+          kubectl label namespace video-platform app.kubernetes.io/managed-by=Helm
+          kubectl annotate namespace video-platform meta.helm.sh/release-name=stream-forge meta.helm.sh/release-namespace=video-platform
+          
+      - name: Create IAM service account
+        run: |
+          eksctl create iamserviceaccount \
+            --name sqs-access-sa \
+            --namespace video-platform \
+            --cluster stream-forge \
+            --attach-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ABR-SQS-Access \
+            --approve \
+            --region us-east-1
+
+      - name: Make trust policy script executable
+        run: |
+          chmod +x ./scripts/trust-policy.sh
+          ./scripts/trust-policy.sh
+
+      - name: Update Helm Chart Values
+        uses: Nextdoor/helm-set-image-tag-action@main
+        with:
+          values_files: ./stream-forge/values.yaml
+          new_tag: ${{ needs.build-and-push.outputs.version }}
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install stream-forge ./stream-forge \
+            --namespace video-platform \
+            --set uploadService.image.tag=${{ needs.build-and-push.outputs.version }} \
+            --set transcodingService.image.tag=${{ needs.build-and-push.outputs.version }} \
+            --set deliveryService.image.tag=${{ needs.build-and-push.outputs.version }}
+
+      - name: Wait for all pods to be Ready
+        run: |
+          kubectl wait --for=condition=Ready pods --all \
+            --namespace video-platform \
+            --timeout=120s
+
+      - name: List all pods in video-platform
+        run: |
+          kubectl get pods --namespace video-platform
+
+      - name: Delete EKS cluster
+        if: always() && steps.create-cluster.outcome != 'skipped'
+        run: |
+          eksctl delete cluster \
+            --name stream-forge \
+            --region us-east-1

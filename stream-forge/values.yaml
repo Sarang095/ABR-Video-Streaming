@@ -1,0 +1,14 @@
+uploadService:
+  image:
+    repository: csag095/upload-service
+    tag: latest
+
+transcodingService:
+  image:
+    repository: csag095/transcoding-service
+    tag: latest
+
+deliveryService:
+  image:
+    repository: csag095/delivery-service
+    tag: latest
