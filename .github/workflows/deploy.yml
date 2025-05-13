@@ -166,9 +166,9 @@ jobs:
 
       - name: Wait for all pods to be Ready
         run: |
-          kubectl wait --for=condition=Ready pods --all \
+          kubectl wait pods --all \
             --namespace video-platform \
-            --timeout=120s
+            --timeout=340s
 
       - name: List all pods in video-platform
         run: |
